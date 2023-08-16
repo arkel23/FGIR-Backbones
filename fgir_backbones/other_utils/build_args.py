@@ -79,7 +79,7 @@ def add_adjust_common_dependent(args):
 def add_common_args():
     parser = argparse.ArgumentParser('Arguments for code: FGIRBackbones')
     # general
-    parser.add_argument('--project_name', type=str, default='FGIRBackbones',
+    parser.add_argument('--project_name', type=str, default='ParamEfficientBackbones',
                         help='project name for wandb')
     parser.add_argument('--debugging', action='store_true',
                         help='when true disables wandb and exits after a single pass')
@@ -193,7 +193,14 @@ def add_model_args(parser):
                         help='not load fc layer when using custom ckpt')
     # frozen backbone
     parser.add_argument('--freeze_backbone', action='store_true')
-
+    parser.add_argument('--unfreeze_first_conv', action='store_true',
+                        help='if true unfreezes first conv: patchifier/stem')
+    # patch prompt tuning
+    parser.add_argument('--ppt', action='store_true', help='patch prompt tuning')
+    parser.add_argument('--prompt_stride', action='store_false',
+                        help='''if true then uses stride of first conv as 
+                        patch size else  kernel, cant use with vgg (stride=1)''')
+    parser.add_argument('--prompt_len', type=int, default=1, help='size of prompt')
     # default config is based on vit_b16
     parser.add_argument('--patch_stride', type=int,
                         help='patch stride for patchifier, e.g. 16 for vit_b16')

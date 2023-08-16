@@ -6,12 +6,12 @@ from einops import repeat, rearrange
 from kornia.contrib import extract_tensor_patches, combine_tensor_patches
 
 
-class Prompt(nn.Module):
+class PatchPromptTuning(nn.Module):
     """Adds (optionally learned) positional embeddings to the inputs."""
 
     def __init__(self, dim, patch_size=16, prompt_len=1):
         super().__init__()
-        self.patch_size = 16
+        self.patch_size = patch_size
         self.prompt_len = prompt_len
 
         self.prompt = nn.Parameter(torch.zeros(1, dim, prompt_len))
