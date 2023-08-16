@@ -1,0 +1,13 @@
+wandb
+#timm==0.6.13
+#pip install --no-dependencies --force-reinstall -v "timm==0.6.13"
+einops
+gradio
+scipy==1.8.0
+#kornia==0.6.11
+# newer versions of pytorch (>1.8.0 cu111)
+#pip install --no-dependencies --force-reinstall -v "kornia==0.6.11"
+# older versions of pytorch
+#pip install --no-dependencies --force-reinstall -v "kornia==0.6.0"
+
+
