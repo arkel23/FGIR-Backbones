@@ -86,9 +86,9 @@ def inverse_normalize(tensor, norm_custom=False):
     return tensor
 
 
-def attention_rollout(scores_soft):
+def attention_rollout(scores):
     # https://github.com/jeonsworld/ViT-pytorch/blob/main/visualize_attention_map.ipynb
-    att_mat = torch.stack(scores_soft).squeeze(1)
+    att_mat = torch.stack(scores).squeeze(1)
 
     # Average the attention weights across all heads.
     att_mat = torch.mean(att_mat, dim=1)
@@ -112,18 +112,6 @@ def attention_rollout(scores_soft):
         mask = reduce(joint_attentions[-1], 's1 s2 -> s1', 'mean')
     else:
         mask = joint_attentions[-1][0, 1:]
-    # grid_size = int(np.sqrt(aug_att_mat.size(-1)))
-    # mask = v[0, 1:].reshape(grid_size, grid_size)
-
-    '''
-    att_max, _ = torch.max(mask, dim=-1)
-    att_min, _ = torch.min(mask, dim=-1)
-    att = (mask - att_min) / (att_max - att_min)
-    att = rearrange(att, '(h w) -> 1 h w', h=int(math.sqrt(att.shape[0])))
-    pool = torch.nn.AvgPool2d(kernel_size=8, stride=1, padding=0)
-    att = pool(att)
-    print(torch.round(att, decimals=2))
-    '''
 
     return mask
 
@@ -138,75 +126,16 @@ def calc_attention(attention):
     else:
         attention = attention[0, 1:]
 
-    '''
-    att_max, _ = torch.max(attention, dim=-1)
-    att_min, _ = torch.min(attention, dim=-1)
-    att = (attention - att_min) / (att_max - att_min)
-    att = rearrange(att, '(h w) -> 1 h w', h=int(math.sqrt(att.shape[0])))
-    pool = torch.nn.AvgPool2d(kernel_size=8, stride=1, padding=0)
-    att = pool(att)
-    print(torch.round(att, decimals=2))
-    '''
-
     return attention
 
 
-def calc_distance_glsim(tokens):
-    h_2d = int(math.sqrt(tokens.shape[1]))
-    if h_2d == tokens.shape[1]:
-        g = tokens[0, :1, :]
-        l = tokens[0, 1:, :]
-    else:
-        g = reduce(tokens, '1 s d -> 1 d', 'mean')
-        l = tokens[0, :, :]
-
-    distances = F.cosine_similarity(g, l, dim=-1)
-
-    return distances
-
-
-def calc_distance_psm(scores_soft, head=0):
-    att_mat = torch.stack(scores_soft).squeeze(1)
-
-    # Recursively multiply the weight matrices
-    joint_attentions = torch.zeros(att_mat.size(), device=att_mat.device)
-    joint_attentions[0] = att_mat[0]
-
-    for n in range(1, att_mat.size(0)):
-        joint_attentions[n] = torch.matmul(att_mat[n], joint_attentions[n-1])
-
-    # Attention from the output CLS token to the input space.
-    mask = joint_attentions[-1][head, 0, 1:]
-
-    return mask
-
-
-def calc_distance_maws(scores_soft, scores):
-    a = reduce(scores_soft.squeeze(), 'h s1 s2 -> s1 s2', 'mean')[0, 1:]
-    b = F.softmax(scores.squeeze(), dim=-2)[:, 1:, 0]
-    b = reduce(b, 'h s1 -> s1', 'mean')
-    ma = a * b
-    return ma
-
-
-def calc_asim(x_norm, scores_soft):
-    distances = calc_distance_glsim(x_norm)
-
-    attn = attention_rollout(scores_soft)
-
-    asim = ((distances - torch.min(distances)) / torch.max(distances)) * ((attn - torch.min(attn)) / torch.max(attn))
-
-    return asim
-
-
-def make_heatmaps(args, fp, img, model, inter, scores_soft, scores, x_norm,
-                  vis_mask_all=False, save=True):
+def make_heatmaps(args, fp, img, model, scores, vis_mask_all=False, save=True):
 
     if vis_mask_all:
 
         for mechanism in args.vis_mask_list:
             args.vis_mask = mechanism
-            make_heatmaps(args, fp, img, model, inter, scores_soft, scores, x_norm)
+            make_heatmaps(args, fp, img, model, scores)
 
         return 0
 
@@ -218,11 +147,7 @@ def make_heatmaps(args, fp, img, model, inter, scores_soft, scores, x_norm,
     elif args.vis_mask.split('_')[-1].isnumeric():
         select = int(args.vis_mask.split('_')[-1])
     elif len(args.vis_mask.split('_')) == 1:
-        if 'maws' in args.vis_mask:
-            select = 10
-        elif 'psm' in args.vis_mask:
-            select = 0
-        elif 'rollout' in args.vis_mask:
+        if 'rollout' in args.vis_mask:
             select_start = 0
             select_end = 12
         else:
@@ -230,20 +155,10 @@ def make_heatmaps(args, fp, img, model, inter, scores_soft, scores, x_norm,
 
     if args.vis_mask == 'gradcam':
         mask = calc_gradcam(args, model, img)
-    elif args.vis_mask == 'asim':
-        mask = calc_asim(x_norm,  scores_soft)
-    elif args.vis_mask == 'glsim_norm':
-        mask = calc_distance_glsim(x_norm)
-    elif 'glsim' in args.vis_mask:
-        mask = calc_distance_glsim(inter[select])
     elif 'attention' in args.vis_mask:
-        mask = calc_attention(scores_soft[select])        
+        mask = calc_attention(scores[select])        
     elif 'rollout' in args.vis_mask:
-        mask = attention_rollout(scores_soft[select_start:select_end])
-    elif 'psm' in args.vis_mask:
-        mask = calc_distance_psm(scores_soft, select)
-    elif 'maws' in args.vis_mask:
-        mask = calc_distance_maws(scores_soft[select], scores[select])
+        mask = attention_rollout(scores[select_start:select_end])
 
     img_masked = apply_mask(img_unnorm, mask, top_k=args.dynamic_top, th=args.vis_th_topk,
                             sq=args.vis_mask_sq, color=args.vis_mask_color)

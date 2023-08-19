@@ -21,12 +21,10 @@ def calc_gradcam(args, model, img):
     #   print(name)
     target_layer_dic ={
         'beitv2_base_patch16_224_in22k': 'model.model.blocks[-1].norm1',
-        #'convnext_base_in22k': 'model.model.stages[-1].blocks[-1].mlp.fc2',
         'convnext_base_in22k': 'model.model.head.norm',
         'resnet101': 'model.model.layer4[-1]',
         'resnetv2_101': 'model.model.norm',
         'resnetv2_101x3_bitm_in21k': 'model.model.norm',
-        # 'swin_base_patch4_window7_224_in22k': 'model.model.norm',
         'swin_base_patch4_window7_224_in22k': 'model.model.layers[-1].blocks[-1].norm1',
         'van_b3': 'model.model.norm4',
         'vgg19_bn': 'model.model.features[-1]',

@@ -22,9 +22,11 @@ IGNORE = ('project_name', 'ckpt_path', 'transfer_learning', 'test_only', 'batch_
 
 def adjust_args_general(args):
     freeze = '_fz' if args.freeze_backbone else ''
+    selector = f'_{args.selector}' if args.selector else ''
+    classifier = f'_{args.classifier}' if args.classifier in ('blp', 'iblp') else ''
 
-    args.run_name = '{}_{}{}_{}'.format(
-        args.dataset_name, args.model_name, freeze, args.serial
+    args.run_name = '{}_{}{}{}{}_{}'.format(
+        args.dataset_name, args.model_name, classifier, selector, freeze, args.serial
     )
 
     args.results_dir = os.path.join(args.results_dir, args.run_name)

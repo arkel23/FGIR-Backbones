@@ -53,12 +53,6 @@ class ViT(nn.Module):
         if config.encoder_norm:
             self.encoder_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
-        # Classifier head
-        if config.load_fc_layer:
-            self.head = nn.Linear(config.hidden_size, config.num_classes)
-            if config.classifier == 'pool':
-                self.head_pool = Reduce('b s d -> b d', 'mean')
-
         # Initialize weights
         self.init_weights()
 
@@ -77,11 +71,8 @@ class ViT(nn.Module):
             nn.init.normal_(self.positional_embedding.pos_embedding, std=0.02)
         if hasattr(self, 'class_token'):
             nn.init.constant_(self.class_token, 0)
-        if hasattr(self, 'head'):
-            nn.init.constant_(self.head.weight, 0)
-            nn.init.constant_(self.head.bias, 0)
 
-    def forward(self, images, ret_dist=False):
+    def forward(self, images, ret_inter=False):
         """
         x (tensor): b k c fh fw -> b s d
         """
@@ -96,18 +87,11 @@ class ViT(nn.Module):
         if hasattr(self, 'positional_embedding'):
             x = self.positional_embedding(x)
 
-        x, inter, scores_soft, scores = self.encoder(x, vis=ret_dist)
+        x, scores = self.encoder(x, ret_inter=ret_inter)
 
         if hasattr(self, 'encoder_norm'):
             x = self.encoder_norm(x)
-        x_norm = x if ret_dist else None
 
-        if hasattr(self, 'head') and hasattr(self, 'class_token'):
-            x = self.head(x[:, 0, :])
-        elif hasattr(self, 'head_pool'):
-            x = self.head_pool(x)
-            x = self.head(x)
-
-        if ret_dist:
-            return x, x_norm, inter, scores_soft, scores
+        if ret_inter:
+            return x, scores
         return x

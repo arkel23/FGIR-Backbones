@@ -8,7 +8,7 @@ from .yaml_config_hook import yaml_config_hook
 VITS = ['vit_t4', 'vit_t8', 'vit_t16', 'vit_t32', 'vit_s8', 'vit_s16', 'vit_s32',
         'vit_b8', 'vit_b16', 'vit_b32', 'vit_l16', 'vit_l32', 'vit_h14']
 MODELS = VITS
-HEADS = (None, 'cls', 'pool')
+HEADS = (None, 'cls', 'pool', 'blp', 'iblp')
 VIS_LIST = ('glsim_norm', 'rollout', 'psm_0', 'psm_11', 
             'maws_0', 'maws_11', 'attention_0', 'attention_11')
 
@@ -191,6 +191,8 @@ def add_model_args(parser):
     parser.add_argument('--ckpt_path', type=str, default=None, help='path to custom pretrained ckpt')
     parser.add_argument('--transfer_learning', action='store_true',
                         help='not load fc layer when using custom ckpt')
+    parser.add_argument('--classifier', type=str, default=None, choices=HEADS)
+    parser.add_argument('--selector', type=str, default=None, choices=[None, 'cal'])
     # frozen backbone
     parser.add_argument('--freeze_backbone', action='store_true')
     parser.add_argument('--unfreeze_first_conv', action='store_true',
@@ -204,8 +206,6 @@ def add_model_args(parser):
     # default config is based on vit_b16
     parser.add_argument('--patch_stride', type=int,
                         help='patch stride for patchifier, e.g. 16 for vit_b16')
-    parser.add_argument('--classifier', type=str, default=None, choices=HEADS)
-    parser.add_argument('--class_proj_size', type=int, default=64)
     # encoder related
     parser.add_argument('--attention', type=str,
                         help='use global attention or a mix of locan and global')

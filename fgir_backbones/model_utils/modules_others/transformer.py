@@ -58,13 +58,13 @@ class AllYouNeedAttention(nn.Module):
             mask = mask[:, None, None, :].float()
             scores -= 10000.0 * (1.0 - mask)
         # this is what's used to visualize attention
-        scores_soft = self.drop(F.softmax(scores, dim=-1))
+        scores = self.drop(F.softmax(scores, dim=-1))
         # (B, H, S, S) @ (B, H, S, W) -> (B, H, S, W) -trans-> (B, S, H, W)
-        h = (scores_soft @ v).transpose(1, 2).contiguous()
+        h = (scores @ v).transpose(1, 2).contiguous()
         # -merge-> (B, S, D)
         h = merge_last(h, 2)
 
-        return h, scores_soft, scores
+        return h, scores
 
 
 class PositionWiseFeedForward(nn.Module):
@@ -98,14 +98,14 @@ class BlockVanilla(nn.Module):
 
     def forward(self, x):
 
-        h, scores_soft, scores = self.attn(self.norm1(x))
+        h, scores = self.attn(self.norm1(x))
         h = self.drop(self.proj(h))
         x = x + h
 
         h = self.drop(self.pwff(self.norm2(x)))
         x = x + h
 
-        return x, scores_soft, scores
+        return x, scores
 
 
 class Transformer(nn.Module):
@@ -120,22 +120,16 @@ class Transformer(nn.Module):
                 dim, num_heads, ff_dim, hidden_dropout_prob, attention_probs_dropout_prob,
                 layer_norm_eps, sd) for _ in range(num_layers)])
 
-    def forward(self, x, vis=False):
-        scores_soft_list = []
+    def forward(self, x, ret_inter=False):
         scores_list = []
-        inter = []
 
-        for i, block in enumerate(self.blocks):
+        for block in self.blocks:
 
-            x, scores_soft, scores = block(x)
+            x, scores = block(x)
 
-            if vis:
-                inter.append(x)
-                scores_soft_list.append(scores_soft)
+            if ret_inter:
                 scores_list.append(scores)
             else:
-                inter.append(None)
-                scores_soft_list.append(None)
                 scores_list.append(None)
 
-        return x, inter, scores_soft_list, scores_list
+        return x, scores_list

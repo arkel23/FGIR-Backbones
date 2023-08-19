@@ -80,7 +80,7 @@ class Trainer():
         with self.amp_autocast():
             output = self.model(images, targets)
 
-            self.saved = save_samples(images, train, self.curr_iter, self.saved, self.args)
+            self.saved = save_samples(images, output, train, self.curr_iter, self.saved, self.args)
 
             output, loss = self.criterion(output, targets, y_a, y_b, lam)
 

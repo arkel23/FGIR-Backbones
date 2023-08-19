@@ -4,9 +4,8 @@ from types import SimpleNamespace
 import timm
 import torch
 import torch.nn as nn
-from einops.layers.torch import Rearrange, Reduce
 
-from .modules_others import van_dict, ViT, ViTConfig, PatchPromptTuning
+from .modules_others import beit_dict, van_dict, ViT, ViTConfig, PatchPromptTuning, Head, CAL
 
 
 VITS = [
@@ -16,31 +15,15 @@ VITS = [
 
 def build_model(args):
     # initiates model and loss
-    if args.model_name in VITS:
-        model = VisionTransformer(args)
-    elif 'van' in args.model_name or args.model_name in timm.list_models(pretrained=True):
-        model = TIMMNets(args)
+    if args.model_name in VITS or 'van' in args.model_name or args.model_name in timm.list_models(pretrained=True):
+        model = ClassifierModel(args)
     else:
         raise NotImplementedError
 
     args.seq_len = model.cfg.seq_len
 
     if args.ckpt_path:
-        state_dict = torch.load(
-            args.ckpt_path, map_location=torch.device('cpu'))['model']
-        expected_missing_keys = []
-        if args.transfer_learning:
-            # modifications to load partial state dict
-            if ('model.head.weight' in state_dict):
-                expected_missing_keys += ['model.head.weight', 'model.head.bias']
-            for key in expected_missing_keys:
-                state_dict.pop(key)
-        ret = model.load_state_dict(state_dict, strict=False)
-        print('''Missing keys when loading pretrained weights: {}
-              Expected missing keys: {}'''.format(ret.missing_keys, expected_missing_keys))
-        print('Unexpected keys when loading pretrained weights: {}'.format(
-            ret.unexpected_keys))
-        print('Loaded from custom checkpoint.')
+        load_model_compatibility_mode(args, model)
 
     if args.freeze_backbone:
         freeze_backbone(args, model)
@@ -55,7 +38,7 @@ def build_model(args):
 
 
 def freeze_backbone(args, model):
-    keywords = ['head', 'prompt']
+    keywords = ['head', 'prompt', 'dfsm', 'feature_center']
 
     if args.unfreeze_first_conv:
         if any(name in args.model_name for name in VITS + ['swin', 'beit']):
@@ -114,9 +97,37 @@ def get_first_conv_kernel_stride(args):
     return None
         
 
-class VisionTransformer(nn.Module):
-    def __init__(self, args):
-        super(VisionTransformer, self).__init__()
+def load_model_compatibility_mode(args, model):
+    state_dict = torch.load(
+        args.ckpt_path, map_location=torch.device('cpu'))['model']
+    expected_missing_keys = []
+
+    # retrocompatibility with prev experiments
+    if 'model.head.head.weight' in state_dict.keys():
+        state_dict['head.head.weight'] = state_dict.pop('model.head.head.weight')
+        state_dict['head.head.bias'] = state_dict.pop('model.head.head.bias')
+    elif 'head.weight' in state_dict.keys():
+        state_dict['head.head.weight'] = state_dict.pop('head.weight')
+        state_dict['head.head.bias'] = state_dict.pop('head.bias')
+
+    if args.transfer_learning:
+        # modifications to load partial state dict
+        if ('model.head.weight' in state_dict):
+            expected_missing_keys += ['model.head.weight', 'model.head.bias']
+        for key in expected_missing_keys:
+            state_dict.pop(key)
+    ret = model.load_state_dict(state_dict, strict=False)
+    print('''Missing keys when loading pretrained weights: {}
+            Expected missing keys: {}'''.format(ret.missing_keys, expected_missing_keys))
+    print('Unexpected keys when loading pretrained weights: {}'.format(
+        ret.unexpected_keys))
+    print('Loaded from custom checkpoint.')
+    return 0
+
+
+def get_backbone(args):
+    if args.model_name in VITS:
+        args.classifier = 'pool' if args.selector == 'cal' else args.classifier
         # init default config
         cfg = ViTConfig(model_name=args.model_name)
         # modify config if given an arg otherwise keep defaults
@@ -130,50 +141,49 @@ class VisionTransformer(nn.Module):
             if hasattr(args, attribute):
                 setattr(args, attribute, getattr(cfg, attribute))
         # init model
-        self.model = ViT(cfg, pretrained=args.pretrained)
-        self.cfg = cfg
+        model = ViT(cfg, pretrained=args.pretrained)
+        # cfg = cfg
 
-        if args.ppt:
-            get_first_conv_kernel_stride(args)
-            patch_size = args.patch_stride if args.prompt_stride else args.patch_kernel
-            self.prompt = PatchPromptTuning(self.cfg.num_channels, patch_size, args.prompt_len)
+    elif 'beitv2' in args.model_name:
+        args.classifier = 'cls' if args.classifier is None else args.classifier
+        model = beit_dict[args.model_name](
+            pretrained=args.pretrained, img_size=args.image_size, num_classes=0,
+            drop_path_rate=args.sd, global_pool='')
+    elif 'van' in args.model_name:
+        model = van_dict[args.model_name](
+            pretrained=args.pretrained,img_size=args.image_size, drop_path_rate=args.sd)
+    elif 'vgg' in args.model_name:
+        model = timm.create_model(args.model_name, pretrained=args.pretrained,
+                                        num_classes=0, global_pool='')
+    elif any(model in args.model_name for model in ['resnet', 'convnext']):
+        model = timm.create_model(
+            args.model_name, pretrained=args.pretrained, num_classes=0,
+            drop_path_rate=args.sd, global_pool='')
+    else:
+        model = timm.create_model(
+            args.model_name, pretrained=args.pretrained, num_classes=0,
+            img_size=args.image_size, drop_path_rate=args.sd, global_pool='')
 
-    def forward(self, images, targets=None, ret_dist=False):
-        if hasattr(self, 'prompt'):
-            images = self.prompt(images)
-
-        out = self.model(images, ret_dist=ret_dist)
-        return out
+    return model
 
 
-class TIMMNets(nn.Module):
+class ClassifierModel(nn.Module):
     def __init__(self, args):
-        super(TIMMNets, self).__init__()
-        # init default config
+        super(ClassifierModel, self).__init__()
 
-        if 'van' in args.model_name:
-            self.model = van_dict[args.model_name](
-                pretrained=args.pretrained,img_size=args.image_size, drop_path_rate=args.sd)
-        elif 'vgg' in args.model_name:
-            self.model = timm.create_model(args.model_name, pretrained=args.pretrained,
-                                           num_classes=0, global_pool='')
-        elif any(model in args.model_name for model in ['resnet', 'convnext']):
-            self.model = timm.create_model(
-                args.model_name, pretrained=args.pretrained, num_classes=0,
-                drop_path_rate=args.sd, global_pool='')
+        self.model_name = args.model_name
+        model = get_backbone(args)
+
+        s, d, bsd = self.get_out_features(args.image_size, model)
+
+        if args.selector == 'cal':
+            self.model = CAL(model, s, d, args.num_classes, bsd, args.device)
+            assert 'beit' not in args.model_name, 'beit not compatible with cal'
         else:
-            self.model = timm.create_model(
-                args.model_name, pretrained=args.pretrained, num_classes=0,
-                img_size=args.image_size, drop_path_rate=args.sd, global_pool='')
-        # to return intermediate features, features_only=True (only works for some)
+            self.model = get_backbone(args)
+            self.head = Head(args.classifier, d, args.num_classes, bsd)
 
-        out_features, s, self.rearrange = self.get_out_features(args.image_size)
-
-        self.pool = Reduce('b s d -> b d', 'mean')
-
-        self.head = nn.Linear(out_features, args.num_classes)
-
-        self.cfg = SimpleNamespace(**{'seq_len': s, 'num_channels': 3})
+        self.cfg = SimpleNamespace(**{'seq_len': s, 'hidden_size': d, 'num_channels': 3})
 
         if args.ppt:
             get_first_conv_kernel_stride(args)
@@ -181,35 +191,36 @@ class TIMMNets(nn.Module):
             self.prompt = PatchPromptTuning(self.cfg.num_channels, patch_size, args.prompt_len)
 
     @torch.no_grad()
-    def get_out_features(self, image_size):
+    def get_out_features(self, image_size, model):
         x = torch.rand(2, 3, image_size, image_size)
-        x = self.model(x)
+        x = model(x)
 
-        if len(x.shape) == 2:
-            b, d = x.shape
-            s = 1
-            rearrange = Rearrange('b d -> b 1 d')
-        elif len(x.shape) == 3:
+        if len(x.shape) == 3:
             b, s, d = x.shape
-            rearrange = nn.Identity()
+            bsd = True
         elif len(x.shape) == 4:
             b, d, h, w = x.shape
             s = h * w
-            rearrange = Rearrange('b d h w -> b (h w) d')
+            bsd = False
 
-        return d, s, rearrange
+        return s, d, bsd
 
-    def forward(self, images, targets=None, ret_dist=False):
+    def forward(self, images, targets=None, ret_inter=False):
         if hasattr(self, 'prompt'):
             images = self.prompt(images)
 
-        features = self.model(images)
-        features = self.rearrange(features)
+        if hasattr(self, 'head'):
+            if (self.model_name in VITS or 'beit' in self.model_name) and ret_inter:
+                features, scores = self.model(images, ret_inter)
+            else:
+                features = self.model(images)
 
-        out = self.pool(features)
-        out = self.head(out)
+            out = self.head(features)
 
-        if ret_dist:
-            return out, features
+            if ret_inter:
+                return out, scores
+
+        else:
+            out = self.model(images, targets)
+
         return out
-

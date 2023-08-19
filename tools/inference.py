@@ -3,11 +3,8 @@ import glob
 
 import pandas as pd
 from PIL import Image
-from einops import rearrange
 import torch
-import torch.nn.functional as F
 from torchvision.utils import save_image
-import timm
 
 from fgir_backbones.other_utils.build_args import parse_inference_args
 from fgir_backbones.data_utils.build_transform import build_transform
@@ -30,13 +27,12 @@ def search_images(args):
 
     # if path is a file
     if os.path.isfile(args.images_path):
-        if os.path.splitext(args.images_path)[1] in types:
-            return [args.images_path]
+        if os.path.splitext(args.images_path)[1] in ('.txt', '.csv'):
+            df = pd.read_csv(args.images_path)
+            print('Total image files', len(df))
+            return df['dir'].tolist()
         else:
-            if os.path.splitext(args.images_path)[1] in ('.txt', '.csv'):
-                df = pd.read_csv(args.images_path)
-                print('Total image files', len(df))
-                return df['dir'].tolist()
+            return [args.images_path]
 
     # else if directory
     files_all = []
@@ -78,21 +74,21 @@ def prepare_inference(args):
     return model, transform, dic_classid_classname
 
 
-def save_crops(images_og, images_crops, fp, image_size,
+def save_crops(images_og, crops, fp, image_size,
                 save_crops_only=False, norm_custom=False):
     fp = fp.replace('.png', '_crops.png')
 
     with torch.no_grad():
-        if images_crops is not None:
-            images_crops = images_crops.reshape(3, image_size, -1)
+        if crops is not None:
+            crops = crops.reshape(3, image_size, -1)
 
-        if save_crops_only and images_crops is not None:
-            samples = inverse_normalize(images_crops.data, norm_custom)
+        if save_crops_only and crops is not None:
+            samples = inverse_normalize(crops.data, norm_custom)
         else:
             images_og = images_og.reshape(3, image_size, image_size)
 
-            if images_crops is not None:
-                images = torch.cat((images_og, images_crops), dim=2)
+            if crops is not None:
+                images = torch.cat((images_og, crops), dim=2)
             else:
                 images = images_og
             samples = inverse_normalize(images.data, norm_custom)
@@ -103,24 +99,15 @@ def save_crops(images_og, images_crops, fp, image_size,
 
 
 def inference_single(args, model, img, dic_classid_classname=None, file=None,
-                     save=False, images_crops=None, scores=None, scores_soft=None, x_norm=None, 
-                     inter=None, fp=None, masked_image=None):
+                     save=False, crops=None, scores=None, fp=None, masked_image=None):
 
     with torch.no_grad():
-        outputs = model(img, ret_dist=True)
+        outputs = model(img, ret_inter=True)
 
-    if args.model_name == 'cal':
-        outputs, images_crops = outputs
-    elif 'van' in args.model_name or args.model_name in timm.list_models():
-        outputs, inter = outputs
-    elif isinstance(outputs, tuple) and len(outputs) == 6:
-        outputs, images_crops, x_norm, inter, scores_soft, scores = outputs
-    elif isinstance(outputs, tuple) and len(outputs) == 5:
-        outputs, x_norm, inter, scores_soft, scores = outputs
-    elif isinstance(outputs, tuple) and len(outputs) == 3:
-        outputs, scores_soft, scores = outputs
+    if isinstance(outputs, tuple) and len(outputs) == 2 and args.selector == 'cal':
+        outputs, crops = outputs
     elif isinstance(outputs, tuple) and len(outputs) == 2:
-        outputs, _ = outputs
+        outputs, scores = outputs
 
     outputs = outputs.squeeze(0)
     for i, idx in enumerate(torch.topk(outputs, k=3).indices.tolist()):
@@ -136,22 +123,16 @@ def inference_single(args, model, img, dic_classid_classname=None, file=None,
             top1_text = out_text
 
     if save:
-        if args.model_name == 'cal':
-            if args.cal_save_all:
-                images_crops = rearrange(images_crops, 'b c h w k -> b c h (k w)')
-            else:
-                images_crops = images_crops[:, :, :, :, 0]
-
         fn = '{}.png'.format(os.path.splitext(os.path.split(file)[1])[0])
         fp = os.path.join(args.results_dir, fn)
-        save_crops(img.detach().clone(), images_crops, fp, args.image_size,
+        save_crops(img.detach().clone(), crops, fp, args.image_size,
                    args.save_crops_only, args.custom_mean_std)
 
-    if (scores is not None or inter is not None) and (args.vis_mask or args.vis_mask_all):
-        masked_image = make_heatmaps(args, fp, img, model, inter, scores_soft,
-                                        scores, x_norm, args.vis_mask_all, save=save)
+    if (args.vis_mask or args.vis_mask_all):
+        masked_image = make_heatmaps(
+            args, fp, img, model, scores, args.vis_mask_all, save=save)
 
-    return top1_text, images_crops, masked_image
+    return top1_text, crops, masked_image
 
 
 def inference_all(args):
