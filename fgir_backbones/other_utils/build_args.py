@@ -203,6 +203,8 @@ def add_model_args(parser):
                         help='''if true then uses stride of first conv as 
                         patch size else  kernel, cant use with vgg (stride=1)''')
     parser.add_argument('--prompt_len', type=int, default=1, help='size of prompt')
+    parser.add_argument('--prompt_layers', type=int, default=2)
+    parser.add_argument('--prompt_dim', type=int, default=128)
     # default config is based on vit_b16
     parser.add_argument('--patch_stride', type=int,
                         help='patch stride for patchifier, e.g. 16 for vit_b16')

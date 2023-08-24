@@ -188,7 +188,10 @@ class ClassifierModel(nn.Module):
         if args.ppt:
             get_first_conv_kernel_stride(args)
             patch_size = args.patch_stride if args.prompt_stride else args.patch_kernel
-            self.prompt = PatchPromptTuning(self.cfg.num_channels, patch_size, args.prompt_len)
+            # self.prompt = PatchPromptTuning(self.cfg.num_channels, patch_size, args.prompt_len)
+            self.prompt = PatchPromptTuning(
+                args.prompt_len, self.cfg.num_channels, args.image_size, patch_size,
+                num_layers=args.prompt_layers, dim_hidden=args.prompt_dim, sd=0.1)
 
     @torch.no_grad()
     def get_out_features(self, image_size, model):
