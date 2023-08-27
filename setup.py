@@ -25,7 +25,8 @@ REQUIRED = [
     # 'django-pipeline==1.1.22', 'south>=0.7'
     'einops',
     'numpy',
-    'torch',
+#    'torch',
+    'ml-collections',
     'torchsummary',
     'wandb',
     'timm',
@@ -33,7 +34,7 @@ REQUIRED = [
     'gdown',
     'gradio',
     'scipy',
-    'kornia',
+#    'kornia',
 ]
 
 # What packages are optional?
