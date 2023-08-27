@@ -146,9 +146,11 @@ def get_backbone(args):
 
     elif 'beitv2' in args.model_name:
         args.classifier = 'cls' if args.classifier is None else args.classifier
+        args.classifier = 'pool' if args.selector == 'cal' else args.classifier
+        cls = True if args.classifier == 'cls' else False
         model = beit_dict[args.model_name](
             pretrained=args.pretrained, img_size=args.image_size, num_classes=0,
-            drop_path_rate=args.sd, global_pool='')
+            drop_path_rate=args.sd, global_pool='', cls=cls)
     elif 'van' in args.model_name:
         model = van_dict[args.model_name](
             pretrained=args.pretrained,img_size=args.image_size, drop_path_rate=args.sd)
@@ -178,7 +180,7 @@ class ClassifierModel(nn.Module):
 
         if args.selector == 'cal':
             self.model = CAL(model, s, d, args.num_classes, bsd, args.device)
-            assert 'beit' not in args.model_name, 'beit not compatible with cal'
+            # assert 'beit' not in args.model_name, 'beit not compatible with cal'
         else:
             self.model = get_backbone(args)
             self.head = Head(args.classifier, d, args.num_classes, bsd)

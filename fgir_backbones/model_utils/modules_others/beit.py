@@ -266,7 +266,7 @@ class Beit(nn.Module):
             embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True, drop_rate=0.,
             attn_drop_rate=0., drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
             init_values=None, use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
-            head_init_scale=0.001):
+            head_init_scale=0.001, cls=True):
         super().__init__()
         self.num_classes = num_classes
         self.global_pool = global_pool
@@ -277,6 +277,8 @@ class Beit(nn.Module):
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         num_patches = self.patch_embed.num_patches
 
+        if cls:
+            self.cls = cls
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         # self.mask_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim)) if use_abs_pos_emb else None
@@ -348,10 +350,10 @@ class Beit(nn.Module):
         return matcher
 
     @torch.jit.ignore
-    def get_classifier(self):
+    def get_cls(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=None):
+    def reset_cls(self, num_classes, global_pool=None):
         self.num_classes = num_classes
         if global_pool is not None:
             self.global_pool = global_pool
@@ -377,6 +379,9 @@ class Beit(nn.Module):
                 scores_list.append(scores)
             else:
                 scores_list.append(None)
+
+        if not hasattr(self, 'cls'):
+            x = x[:, 1:, :]
 
         x = self.norm(x)
 
@@ -405,101 +410,101 @@ def _create_beit(variant, pretrained=False, **kwargs):
 
 
 @register_model
-def beit_base_patch16_224(pretrained=False, **kwargs):
+def beit_base_patch16_224(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=0.1, **kwargs)
-    model = _create_beit('beit_base_patch16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beit_base_patch16_224', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beit_base_patch16_384(pretrained=False, **kwargs):
+def beit_base_patch16_384(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         img_size=384, patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=0.1, **kwargs)
-    model = _create_beit('beit_base_patch16_384', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beit_base_patch16_384', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beit_base_patch16_224_in22k(pretrained=False, **kwargs):
+def beit_base_patch16_224_in22k(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=0.1, **kwargs)
-    model = _create_beit('beit_base_patch16_224_in22k', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beit_base_patch16_224_in22k', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beit_large_patch16_224(pretrained=False, **kwargs):
+def beit_large_patch16_224(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5,  **kwargs)
-    model = _create_beit('beit_large_patch16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beit_large_patch16_224', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beit_large_patch16_384(pretrained=False, **kwargs):
+def beit_large_patch16_384(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         img_size=384, patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5, **kwargs)
-    model = _create_beit('beit_large_patch16_384', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beit_large_patch16_384', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beit_large_patch16_512(pretrained=False, **kwargs):
+def beit_large_patch16_512(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         img_size=512, patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5, **kwargs)
-    model = _create_beit('beit_large_patch16_512', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beit_large_patch16_512', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beit_large_patch16_224_in22k(pretrained=False, **kwargs):
+def beit_large_patch16_224_in22k(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5,  **kwargs)
-    model = _create_beit('beit_large_patch16_224_in22k', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beit_large_patch16_224_in22k', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beitv2_base_patch16_224(pretrained=False, **kwargs):
+def beitv2_base_patch16_224(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5, **kwargs)
-    model = _create_beit('beitv2_base_patch16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beitv2_base_patch16_224', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beitv2_base_patch16_224_in22k(pretrained=False, **kwargs):
+def beitv2_base_patch16_224_in22k(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5, **kwargs)
-    model = _create_beit('beitv2_base_patch16_224_in22k', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beitv2_base_patch16_224_in22k', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beitv2_large_patch16_224(pretrained=False, **kwargs):
+def beitv2_large_patch16_224(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5,  **kwargs)
-    model = _create_beit('beitv2_large_patch16_224', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beitv2_large_patch16_224', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
 @register_model
-def beitv2_large_patch16_224_in22k(pretrained=False, **kwargs):
+def beitv2_large_patch16_224_in22k(pretrained=False, cls='cls', **kwargs):
     model_kwargs = dict(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         use_abs_pos_emb=False, use_rel_pos_bias=True, init_values=1e-5,  **kwargs)
-    model = _create_beit('beitv2_large_patch16_224_in22k', pretrained=pretrained, **model_kwargs)
+    model = _create_beit('beitv2_large_patch16_224_in22k', pretrained=pretrained, cls=cls, **model_kwargs)
     return model
 
 
