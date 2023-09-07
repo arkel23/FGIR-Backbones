@@ -31,7 +31,8 @@ def search_images(args):
             df = pd.read_csv(args.images_path)
             print('Total image files', len(df))
             return df['dir'].tolist()
-        else:
+
+        elif any([t in os.path.splitext(args.images_path)[1] for t in types]):
             return [args.images_path]
 
     # else if directory
