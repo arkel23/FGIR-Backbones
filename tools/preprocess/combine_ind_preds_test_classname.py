@@ -39,15 +39,23 @@ def update_ind_preds(args):
     fp = os.path.join(args.dataset_root_path, fn_test)
     df_test = pd.read_csv(fp)
 
+    print(ind_preds.head())
+
     # keep all ind_preds or filter by only wrong
     if args.save_wrong_preds_only:
-        print('Before filtering: ', len(ind_preds))
-        print(ind_preds.head())
+        print('Before filtering wrong only: ', len(ind_preds))
 
         ind_preds = ind_preds[ind_preds['class_id'] != ind_preds['pred_id']]
 
         print('After filtering wrong only: ', len(ind_preds))
-        print(ind_preds.head())
+
+    # filter by confidently wrong
+    if args.save_prob_th:
+        print('Before filtering with confidence threshold: ', len(ind_preds))
+
+        ind_preds = ind_preds[ind_preds['prob'] >= args.save_prob_th]
+
+        print('After filtering with confidence threshold: ', len(ind_preds))
 
     # update ind_preds with class_name and pred_class_name columns
     ind_preds['class_name'] = ind_preds['class_id'].apply(lambda x: dic_classid_classname[x])
@@ -56,6 +64,7 @@ def update_ind_preds(args):
     # update with full dir
     ind_preds['dir'] = df_test['dir'].apply(lambda x: os.path.join(args.dataset_root_path, folder_test, x))
 
+    # save only certain columns
     df_updated = ind_preds[['dir', 'class_name', 'pred_class_name', 'prob']]
     results_path =os.path.split(os.path.normpath(args.preds_path))[0]
     fp_out = os.path.join(results_path, f'{args.output_name}.csv')
@@ -73,6 +82,8 @@ def main():
                         help='path to ind_preds.csv (results_train/dataset_model/ind_preds.csv)')
     parser.add_argument('--save_wrong_preds_only', action='store_false',
                         help='by default only saves wrong preds (if use flag saves all)')
+    parser.add_argument('--save_prob_th', type=float, default=0.5,
+                        help='float from 0 to 1 (saves only preds with confidence above threshold)')
     parser.add_argument('--output_name', type=str, default='wrong_preds')
 
     parser.add_argument('--dataset_name', default=None, type=str, help='dataset name')
