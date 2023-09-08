@@ -8,7 +8,7 @@ from .yaml_config_hook import yaml_config_hook
 VITS = ['vit_t4', 'vit_t8', 'vit_t16', 'vit_t32', 'vit_s8', 'vit_s16', 'vit_s32',
         'vit_b8', 'vit_b16', 'vit_b32', 'vit_l16', 'vit_l32', 'vit_h14']
 MODELS = VITS
-HEADS = (None, 'cls', 'pool', 'blp', 'iblp')
+HEADS = (None, 'cls', 'pool', 'blp', 'iblp', 'mpncov')
 VIS_LIST = ('glsim_norm', 'rollout', 'psm_0', 'psm_11', 
             'maws_0', 'maws_11', 'attention_0', 'attention_11')
 
@@ -192,6 +192,8 @@ def add_model_args(parser):
     parser.add_argument('--transfer_learning', action='store_true',
                         help='not load fc layer when using custom ckpt')
     parser.add_argument('--classifier', type=str, default=None, choices=HEADS)
+    parser.add_argument('--class_proj_size', type=int, default=256,
+                        help='dim reduction before classifier in mpncov')
     parser.add_argument('--selector', type=str, default=None, choices=[None, 'cal'])
     # frozen backbone
     parser.add_argument('--freeze_backbone', action='store_true')

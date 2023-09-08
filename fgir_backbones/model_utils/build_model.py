@@ -180,10 +180,9 @@ class ClassifierModel(nn.Module):
 
         if args.selector == 'cal':
             self.model = CAL(model, s, d, args.num_classes, bsd, args.device)
-            # assert 'beit' not in args.model_name, 'beit not compatible with cal'
         else:
             self.model = get_backbone(args)
-            self.head = Head(args.classifier, d, args.num_classes, bsd)
+            self.head = Head(args.classifier, d, args.num_classes, bsd, args.class_proj_size)
 
         self.cfg = SimpleNamespace(**{'seq_len': s, 'hidden_size': d, 'num_channels': 3})
 

@@ -1,62 +1,26 @@
+import math
 import torch
 from torch import nn
 from einops import rearrange
 from einops.layers.torch import Reduce, Rearrange
 
-
-import torch
-import torch.nn as nn
-from torch.autograd import Function
-
-
-def sqrt_newton_schulz(A, numIters):
-    batchSize = A.shape[0]
-    dim = A.shape[1]
-    normA = A.mul(A).sum(dim=1).sum(dim=1).sqrt()
-    Y = A.div(normA.view(batchSize, 1, 1).expand_as(A))
-    I = torch.eye(dim,dim).view(1, dim, dim).repeat(batchSize,1,1).type(torch.cuda.FloatTensor)
-    Z = torch.eye(dim,dim).view(1, dim, dim).repeat(batchSize,1,1).type(torch.cuda.FloatTensor)
-    for i in range(numIters):
-        T = 0.5*(3.0*I - Z.bmm(Y))
-        Y = Y.bmm(T)
-        Z = T.bmm(Z)
-    sA = Y*torch.sqrt(normA).view(batchSize, 1, 1).expand_as(A)
-    return sA
-
-
-def lyap_newton_schulz(z, dldz, numIters):
-    batchSize = z.shape[0]
-    dim = z.shape[1]
-    normz = z.mul(z).sum(dim=1).sum(dim=1).sqrt()
-    a = z.div(normz.view(batchSize, 1, 1).expand_as(z))
-    I = torch.eye(dim,dim).view(1, dim, dim).repeat(batchSize,1,1).type(torch.cuda.FloatTensor)
-    q = dldz.div(normz.view(batchSize, 1, 1).expand_as(z))
-    for i in range(numIters):
-        q = 0.5*(q.bmm(3.0*I - a.bmm(a)) - a.transpose(1, 2).bmm(a.transpose(1,2).bmm(q) - q.bmm(a)) )
-        a = 0.5*a.bmm(3.0*I - a.bmm(a))
-    dlda = 0.5*q
-    return dlda
-
-
-class matrix_sqrt(Function):
-    @staticmethod
-    def forward(ctx, input):
-        output = sqrt_newton_schulz(input, 10)
-        ctx.save_for_backward(output)
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        output = ctx.saved_tensors[0]
-        grad_input = lyap_newton_schulz(output, grad_output, 10)
-        return grad_input
+from .matrix_sqrt import matrix_sqrt
+from .mpncov import MPNCOV
 
 
 class Head(nn.Module):
-    def __init__(self, classifier, hidden_size, num_classes, bsd=True):
+    def __init__(self, classifier, hidden_size, num_classes, bsd=True, proj_size=256):
         super().__init__()
 
-        if classifier == 'iblp':
+        if classifier == 'mpncov':
+            # class proj size for vgg/resnet by def is 256 (512 for vgg / 2048 for rn -> 256)
+            # it uses a classifier factor (5, 100, 1000) that increases lr by factor for classifier
+            self.mpncov = MPNCOV(input_dim=hidden_size, dimension_reduction=proj_size)
+            self.head = nn.Sequential(
+                Rearrange('b d 1 -> b d'),
+                nn.Linear(proj_size * (proj_size + 1) // 2, num_classes)
+            )
+        elif classifier == 'iblp':
             # https://arxiv.org/abs/1707.06772
             # https://github.com/DennisLeoUTS/improved-bilinear-pooling/
             # the improved norm can be sqrt matrix or log matrix (not element-wise)
@@ -90,7 +54,13 @@ class Head(nn.Module):
         if hasattr(self, 'rearrange'):
             x = self.rearrange(x)
 
-        if hasattr(self, 'blp_head'):
+        if hasattr(self, 'mpncov'):
+            # 2d input: b, c, h, w -> 1d output: b, dim_out*(dim_out+1)/2, 1
+            x = rearrange(x, 'b (h w) d -> b d h w', h=int(math.sqrt(x.shape[1])))
+            x = self.mpncov(x)
+            x = self.head(x)
+
+        elif hasattr(self, 'blp_head'):
             x = torch.matmul(rearrange(x, 'b s d -> b d s'), x) / x.shape[1]
 
             if hasattr(self, 'matrix_sqrt'):
