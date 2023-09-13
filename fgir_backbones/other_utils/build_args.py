@@ -310,7 +310,7 @@ def parse_train_args(ret_parser=False):
                         help='same as test_only but forces bs 1 to emulate streaming/on-demand classification')
     parser.add_argument('--offline', action='store_true',
                         help='do not upload results to wandb')
-    parser.add_argument('--test_multiple', type=int, default=5,
+    parser.add_argument('--test_multiple', type=int, default=4,
                         help='test multiple loops (to reduce model loading time influence)')
     parser.add_argument('--vis_errors', action='store_true',
                         help='when true shows prediction errors (turns on test_only by def)')

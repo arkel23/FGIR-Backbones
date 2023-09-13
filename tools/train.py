@@ -16,8 +16,9 @@ from fgir_backbones.train_utils.trainer import Trainer
 from fgir_backbones.train_utils.calc_loss import OverallLoss
 
 
-IGNORE = ('project_name', 'ckpt_path', 'transfer_learning', 'test_only', 'batch_size',
-          'vis_errors', 'vis_errors_save', 'distributed', 'epochs', 'debugging', 'test_multiple')
+IGNORE = ('ckpt_path', 'transfer_learning', 'test_only', 'test_multiple', 'offline',
+          'vis_errors', 'vis_errors_save', 'distributed',
+          'batch_size', 'epochs', 'debugging',)
 
 
 def adjust_args_general(args):
