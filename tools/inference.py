@@ -32,7 +32,7 @@ def search_images(args):
             print('Total image files', len(df))
             return df['dir'].tolist()
 
-        elif any([t in os.path.splitext(args.images_path)[1] for t in types]):
+        elif any([t.replace('*', '') in os.path.splitext(args.images_path)[1] for t in types]):
             return [args.images_path]
 
     # else if directory
@@ -54,10 +54,12 @@ def prepare_inference(args):
     model.eval()
 
     if args.results_inference:
-        if args.dynamic_anchor:
-            model_name = f'{args.model_name}_{args.selector}'
-        else:
-            model_name = f'{args.model_name}'
+        freeze = '_fz' if args.freeze_backbone else ''
+        selector = f'_{args.selector}' if args.selector else ''
+        classifier = f'_{args.classifier}' if args.classifier in ('blp', 'iblp') else ''
+
+        model_name = '{}{}{}{}'.format(args.model_name, classifier, selector, freeze)
+
         args.results_dir = os.path.join(args.results_inference, f'{model_name}')
         os.makedirs(args.results_dir, exist_ok=True)
 

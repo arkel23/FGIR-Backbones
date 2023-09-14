@@ -43,8 +43,15 @@ def build_environment(args):
                         getattr(args, k) >= args_temp['image_size'] and
                         getattr(args, k) < v))):
                     pass
+                # checkpoints with previous codebase (cal_model_name eg cal_vit_b16)
+                elif (k == 'model_name' and 'vit' in v and 'cal' in v):
+                    new_model_name = v.replace('cal_', '')
+                    setattr(args, k, new_model_name)
+                    args_temp['selector'] = 'cal'
                 else:
                     setattr(args, k, v)
+
+        print(args)
 
     if args.serial is None:
         args.serial = random.randint(0, 1000)

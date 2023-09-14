@@ -221,8 +221,10 @@ class ClassifierModel(nn.Module):
 
             out = self.head(features)
 
-            if ret_inter:
+            if (self.model_name in VITS or 'beit' in self.model_name) and ret_inter:
                 return out, scores
+            else:
+                return out
 
         else:
             out = self.model(images, targets)
