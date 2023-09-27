@@ -315,8 +315,3 @@ class CAL(nn.Module):
             y_pred = (y_pred + y_pred_m) / 2.
 
             return y_pred, crop_images
-
-
-CONFIGS_CAL = {
-    'cal': get_cal_config()
-}

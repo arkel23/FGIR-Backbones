@@ -79,11 +79,12 @@ def prepare_inference(args):
 
 def save_crops(images_og, crops, fp, image_size,
                 save_crops_only=False, norm_custom=False):
-    fp = fp.replace('.png', '_crops.png')
-
     with torch.no_grad():
         if crops is not None:
+            fp = fp.replace('.png', '_crops.png')
             crops = crops.reshape(3, image_size, -1)
+        else:
+            fp = fp.replace('.png', '_og.png')
 
         if save_crops_only and crops is not None:
             samples = inverse_normalize(crops.data, norm_custom)

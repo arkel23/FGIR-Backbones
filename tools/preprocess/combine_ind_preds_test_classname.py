@@ -7,7 +7,7 @@ import pandas as pd
 def yaml_config_hook(config_file):
     """
     Custom YAML config loader, which can include other yaml files (I like using config files
-    insteaad of using argparser)
+    instead of using argparser)
     """
 
     # load yaml files in the nested 'defaults' section, which include defaults for experiments
@@ -66,8 +66,9 @@ def update_ind_preds(args):
 
     # save only certain columns
     df_updated = ind_preds[['dir', 'class_name', 'pred_class_name', 'prob']]
-    results_path =os.path.split(os.path.normpath(args.preds_path))[0]
-    fp_out = os.path.join(results_path, f'{args.output_name}.csv')
+    results_path, fn_in =os.path.split(os.path.normpath(args.preds_path))
+    fn_out = f'{args.output_name}_{fn_in}'
+    fp_out = os.path.join(results_path, fn_out)
     df_updated.to_csv(fp_out, sep=',', header=True, index=False)
 
     print(f'Saved to {fp_out}', df_updated.head())
@@ -82,9 +83,9 @@ def main():
                         help='path to ind_preds.csv (results_train/dataset_model/ind_preds.csv)')
     parser.add_argument('--save_wrong_preds_only', action='store_false',
                         help='by default only saves wrong preds (if use flag saves all)')
-    parser.add_argument('--save_prob_th', type=float, default=0.5,
+    parser.add_argument('--save_prob_th', type=float, default=80,
                         help='float from 0 to 1 (saves only preds with confidence above threshold)')
-    parser.add_argument('--output_name', type=str, default='wrong_preds')
+    parser.add_argument('--output_name', type=str, default='wrong')
 
     parser.add_argument('--dataset_name', default=None, type=str, help='dataset name')
     parser.add_argument('--dataset_root_path', type=str, default=None,

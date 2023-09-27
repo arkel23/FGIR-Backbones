@@ -51,8 +51,6 @@ def build_environment(args):
                 else:
                     setattr(args, k, v)
 
-        print(args)
-
     if args.serial is None:
         args.serial = random.randint(0, 1000)
     # Set device and random seed

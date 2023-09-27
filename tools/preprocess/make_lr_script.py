@@ -4,15 +4,15 @@ import pandas as pd
 
 def make_lr_script(args):
     df = pd.read_csv(args.input_file)
-    df = df[['dataset_name', 'model_name', 'val_loss', 'train_acc', 'lr']]
+    df = df[['dataset_name', 'model_name', 'val_loss', 'train_acc', 'lr', 'base_lr']]
 
     # dataset and model names
     dataset_list = df['dataset_name'].unique()
     model_list = df['model_name'].unique()
 
     # create file with specified file name
-    file_name = f'{args.output_file}.sh'
-    f = open(file_name, "w")
+    output_file = os.path.join(args.results_dir, f'{args.output_file}.sh')
+    f = open(output_file, "w")
 
     #for loop for each dataset
     for dataset in dataset_list:
@@ -45,11 +45,11 @@ def make_lr_script(args):
                 # sort subset based on train acc (highest to lowest)
                 df_subset_sorted = df_subset.sort_values(by=['train_acc'], ascending=False) 
                 print(df_subset_sorted)
-                lr = df_subset_sorted['lr'].iloc[0]
+                lr = df_subset_sorted[args.lr_var].iloc[0]
 
             # returns lr corresponding to best val loss
             else:
-                lr = df_subset_sorted['lr'].iloc[best_idx]
+                lr = df_subset_sorted[args.lr_var].iloc[best_idx]
             
             # check the current subset and the selected LR
             # print(dataset, model, lr, df_subset.head())
@@ -65,17 +65,16 @@ def make_lr_script(args):
 
 
 def parse_args():
-    '''
-    # make stage 2 (multi seed) script based on stage 1 (lr search) results from wandb
-    # input: .csv file from wandb with 'model_name', 'dataset_name', 'lr',
-    # 'val_loss', and 'train_acc' columns
-    '''
+
     parser = argparse.ArgumentParser()
 
     #parser arguments
-    parser.add_argument('--input_file', type=str, default='cal_backbones_stage1.csv',
+    parser.add_argument('--input_file', type=str,
+                        default=os.path.join('data', 'stage1_cal_backbones.csv'),
                         help='filename for input .csv file')
 
+    parser.add_argument('--lr_var', type=str, default='lr',
+                        help='for inat/dafb use --lr_var base_lr')
     parser.add_argument('--prefix', type=str,
                         default='./scripts/run.sh --serial 1 --run_seed',
                         help='prefix for the file in each line')
@@ -84,15 +83,16 @@ def parse_args():
                         help='suffix for the file in each line')
     parser.add_argument('--output_file', type=str, default='lr_script',
                         help='output file name')
+    parser.add_argument('--results_dir', default='results', type=str,
+                        help='The directory where results will be stored')
 
     args= parser.parse_args()
 
     print(args)
 
-    args= parser.parse_args()
+    if not os.path.exists(args.results_dir):
+        os.makedirs(args.results_dir)
 
-
-    args= parser.parse_args()
     return args
 
 

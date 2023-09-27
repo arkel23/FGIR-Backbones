@@ -9,8 +9,7 @@ VITS = ['vit_t4', 'vit_t8', 'vit_t16', 'vit_t32', 'vit_s8', 'vit_s16', 'vit_s32'
         'vit_b8', 'vit_b16', 'vit_b32', 'vit_l16', 'vit_l32', 'vit_h14']
 MODELS = VITS
 HEADS = (None, 'cls', 'pool', 'blp', 'iblp', 'mpncov')
-VIS_LIST = ('glsim_norm', 'rollout', 'psm_0', 'psm_11', 
-            'maws_0', 'maws_11', 'attention_0', 'attention_11')
+VIS_LIST = ('gradcam')
 
 
 def add_adjust_common_dependent(args):
@@ -357,10 +356,7 @@ def parse_inference_args():
     parser.add_argument('--vis_mask_sq', action='store_true',
                         help='square masks when applying heatmap')
     parser.add_argument('--vis_mask', type=str, default=None,
-                        help='''which layer/mechanism to visualize:
-                        glsim_norm, glsim_l, maws_l, attention_l where l is the layer (0 to L)
-                        rollout_l until what layer or psm_h which head
-                        ''')
+                        help='which layer/mechanism to visualize: gradcam')
     parser.add_argument('--vis_mask_all', action='store_true',
                         help='if true then visualizes all choices in vis_list')
     parser.add_argument('--vis_mask_list', type=str, nargs='+', default=VIS_LIST,
