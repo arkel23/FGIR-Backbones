@@ -32,6 +32,7 @@
 !**/samples/**/cub*
 !**/samples/**/homura*
 !**/samples/**/notarctia*
+**/results*/*
 **/results_train/*
 !**/results_inference/**/homura*_crops*
 #!**/results_inference/**/cub*_crops*

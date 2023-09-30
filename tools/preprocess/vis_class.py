@@ -49,7 +49,7 @@ def make_img_grid(args):
 
     df = df.iloc[:args.num_images]
 
-    if args.filter_random:
+    if args.random:
         df = df.sample(frac=1)
 
     num_images = len(df)
@@ -113,7 +113,7 @@ def main():
                         help='by def visualizes train split, if use this flag then vis test')
     parser.add_argument('--num_images', type=int, default=16,
                         help='number of images to visualize in grid')
-    parser.add_argument('--filter_random', action='store_true',
+    parser.add_argument('--random', action='store_true',
                         help='if used then returns random num_images rather than first')
     parser.add_argument('--class_id', type=int, default=0,
                         help='class id for class to visualize')

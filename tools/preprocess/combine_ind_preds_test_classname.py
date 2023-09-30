@@ -42,7 +42,7 @@ def update_ind_preds(args):
     print(ind_preds.head())
 
     # keep all ind_preds or filter by only wrong
-    if args.save_wrong_preds_only:
+    if args.wrong_preds_only:
         print('Before filtering wrong only: ', len(ind_preds))
 
         ind_preds = ind_preds[ind_preds['class_id'] != ind_preds['pred_id']]
@@ -50,10 +50,10 @@ def update_ind_preds(args):
         print('After filtering wrong only: ', len(ind_preds))
 
     # filter by confidently wrong
-    if args.save_prob_th:
+    if args.prob_th:
         print('Before filtering with confidence threshold: ', len(ind_preds))
 
-        ind_preds = ind_preds[ind_preds['prob'] >= args.save_prob_th]
+        ind_preds = ind_preds[ind_preds['prob'] >= args.prob_th]
 
         print('After filtering with confidence threshold: ', len(ind_preds))
 
@@ -81,10 +81,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--preds_path', type=str, required=True,
                         help='path to ind_preds.csv (results_train/dataset_model/ind_preds.csv)')
-    parser.add_argument('--save_wrong_preds_only', action='store_false',
+    parser.add_argument('--wrong_preds_only', action='store_false',
                         help='by default only saves wrong preds (if use flag saves all)')
-    parser.add_argument('--save_prob_th', type=float, default=80,
-                        help='float from 0 to 1 (saves only preds with confidence above threshold)')
+    parser.add_argument('--prob_th', type=float, default=80,
+                        help='float from 0 to 100 (saves only preds with confidence above threshold)')
     parser.add_argument('--output_name', type=str, default='wrong')
 
     parser.add_argument('--dataset_name', default=None, type=str, help='dataset name')
