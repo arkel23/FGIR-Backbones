@@ -110,6 +110,13 @@ def load_model_compatibility_mode(args, model):
         state_dict['head.head.weight'] = state_dict.pop('head.weight')
         state_dict['head.head.bias'] = state_dict.pop('head.bias')
 
+    # saved when using distributed training has an additional module. at the start of the keys
+    if list(state_dict.keys())[0].startswith('module.'):
+        for k in list(state_dict.keys()):
+            if k.startswith('module.'):
+                new_k = k.replace('module.', '', 1)
+                state_dict[new_k] = state_dict.pop(k)        
+
     if args.transfer_learning:
         # modifications to load partial state dict
         if ('model.head.weight' in state_dict):

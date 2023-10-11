@@ -223,7 +223,7 @@ def main(transform=None, model=None):
     parser.add_argument('--preds_path', type=str, required=True,
                         help='path to ind_preds.csv (results_train/dataset_model/ind_preds.csv)')
 
-    parser.add_argument('--wrong_preds_only', action='store_false',
+    parser.add_argument('--wrong_preds_only', action='store_true',
                         help='by default only saves wrong preds (if use flag saves all)')
     parser.add_argument('--prob_th', type=float, default=None,
                         help='filter confidently wrong')
