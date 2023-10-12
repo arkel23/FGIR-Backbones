@@ -1,8 +1,10 @@
 # https://github.com/Lyken17/pytorch-OpCounter
 # https://github.com/sovrasov/flops-counter.pytorch
+# https://github.com/zhijian-liu/torchprofile
 import torch
 from thop import profile
 from ptflops import get_model_complexity_info
+from torchprofile import profile_macs
 
 from fgir_backbones.model_utils.build_model import build_model
 from fgir_backbones.other_utils.build_args import parse_train_args
@@ -82,7 +84,10 @@ def main():
             print_per_layer_stat=args.debugging, verbose=args.debugging)
         macs2 = macs2 / 1e9
 
-        print(name, params, macs, macs2)
+        macs3 = profile_macs(model, x)
+        macs3 = macs3 / 1e9
+
+        print(name, params, macs, macs2, macs3)
 
         if 'vit' in name:
             cfg = ViTConfig(model_name=args.model_name)

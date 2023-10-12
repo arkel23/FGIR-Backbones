@@ -115,6 +115,7 @@ def load_model_compatibility_mode(args, model):
         for k in list(state_dict.keys()):
             if k.startswith('module.'):
                 new_k = k.replace('module.', '', 1)
+                print(k, new_k)
                 state_dict[new_k] = state_dict.pop(k)        
 
     if args.transfer_learning:
