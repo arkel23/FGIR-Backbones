@@ -78,7 +78,7 @@ def add_adjust_common_dependent(args):
 def add_common_args():
     parser = argparse.ArgumentParser('Arguments for code: FGIRBackbones')
     # general
-    parser.add_argument('--project_name', type=str, default='ParamEfficientBackbones',
+    parser.add_argument('--project_name', type=str, default='Backbones',
                         help='project name for wandb')
     parser.add_argument('--debugging', action='store_true',
                         help='when true disables wandb and exits after a single pass')
