@@ -31,10 +31,13 @@ def calc_gradcam(args, model, img):
         'vit_b16': 'model.model.encoder.blocks[-1].norm1',
     }
 
-    # if using cal selector then add an additional [0] -> model.model.encoder[0]
-    # target_layer_dic[args.model_name] = target_layer_dic[args.model_name].replace('model.model.', 'model.model.encoder[0].')
+    target_layer = target_layer_dic[args.model_name]
+    if args.selector == 'cal':
+        target_layer = target_layer.replace('model.model.', 'model.model.encoder[0].')
+        # if using cal selector then add an additional [0] -> model.model.encoder[0]
+        # target_layer_dic[args.model_name] = target_layer_dic[args.model_name].replace('model.model.', 'model.model.encoder[0].')
 
-    target_layer = eval(target_layer_dic[args.model_name])
+    target_layer = eval(target_layer)
 
     for _, param in model.named_parameters():
         param.requires_grad = True

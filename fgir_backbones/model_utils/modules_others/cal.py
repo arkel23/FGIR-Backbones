@@ -314,4 +314,5 @@ class CAL(nn.Module):
             y_pred_m = (y_pred_raw_m + y_pred_crop_m + y_pred_crop_m2 + y_pred_crop_m3) / 4.
             y_pred = (y_pred + y_pred_m) / 2.
 
-            return y_pred, crop_images
+            return y_pred
+            # return y_pred, crop_images

@@ -16,6 +16,9 @@ from fgir_backbones.data_utils.build_transform import build_transform
 from heatmap import make_heatmaps
 
 
+IGNORE = ('ckpt_path', 'results_dir', 'freeze_backbone')
+
+
 def yaml_config_hook(config_file):
     """
     Custom YAML config loader, which can include other yaml files (I like using config files
@@ -118,7 +121,7 @@ def prepare_inference(args):
     if args.ckpt_path:
         args_temp = vars(torch.load(args.ckpt_path, map_location=torch.device('cpu'))['config'])
         for k, v in args_temp.items():
-            if k not in ('ckpt_path', 'results_dir'):
+            if k not in IGNORE:
                 if ((k == 'dataset_root_path' and getattr(args, k, None) is not None) or
                     (k == 'test_resize_size' and (
                         getattr(args, k) >= args_temp['image_size'] and
@@ -259,6 +262,8 @@ def main(transform=None, model=None):
     parser.add_argument('--model_name', type=str, default='vit_b16')  # , choices=MODELS)
     parser.add_argument('--ckpt_path', type=str, default=None, help='path to custom pretrained ckpt')
     parser.add_argument('--ppt', action='store_true', help='patch prompt tuning')
+    parser.add_argument('--freeze_backbone', action='store_true')
+    parser.add_argument('--dynamic_top', type=int, default=8)
 
     # augs
     parser.add_argument('--resize_size', type=int, default=None, help='resize_size before cropping')
