@@ -207,12 +207,14 @@ class WSDAN_CAL(nn.Module):
 
 
 class CAL(nn.Module):
-    def __init__(self, model, seq_len=196, hidden_size=768, num_classes=1000, bsd=False, device='cpu'):
+    def __init__(self, model, seq_len=196, hidden_size=768, num_classes=1000,
+                 bsd=False, device='cpu', cal_ap_only=False):
         super(CAL, self).__init__()
 
         config = get_cal_config()
         self.beta = config.beta
         self.single_crop = config.single_crop
+        self.cal_ap_only = cal_ap_only
 
         # Network Initialization
         if bsd:
@@ -262,9 +264,14 @@ class CAL(nn.Module):
             return (y_pred, y_pred_raw, y_pred_aux, feature_matrix, feature_center_batch,
                     y_pred_aug, crop_images)
 
+        elif self.cal_ap_only:
+            feature_maps = self.encoder(x)
+            y_pred, _, _, _ = self.dfsm(feature_maps)
+            return y_pred
+
         elif self.single_crop:
             feature_maps = self.encoder(x)
-            y_pred_raw, y_pred_aux, _, attention_map = self.dfsm(feature_maps)
+            y_pred_raw, _, _, attention_map = self.dfsm(feature_maps)
 
             crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.1, padding_ratio=0.05)
             feature_maps = self.encoder(crop_images3)
