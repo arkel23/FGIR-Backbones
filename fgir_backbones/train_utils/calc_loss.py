@@ -25,7 +25,7 @@ class CALLoss(nn.Module):
         self.center_loss = CenterLoss()
 
     def forward(self, output, y):
-        if len(output) == 7:
+        if isinstance(output, tuple) and len(output) == 7:
             (_, y_pred_raw, y_pred_aux, feature_matrix, feature_center_batch,
              y_pred_aug, _) = output
 
@@ -70,7 +70,7 @@ class OverallLoss(nn.Module):
             loss = self.criterion(output, targets)
 
         if self.args.selector == 'cal':
-            if len(output) == 7:
+            if isinstance(output, tuple) and len(output) == 7:
                 output, _, _, _, _, _, _ = output
             elif isinstance(output, tuple) and len(output) == 2:
                 output, _ = output
