@@ -63,6 +63,8 @@ def save_samples(images, output, train, curr_iter, saved, args):
     if args.selector == 'cal':
         if isinstance(output, tuple) and len(output) == 7:
             output, _, _, _, _, _, crops = output
+        elif isinstance(output, tuple) and len(output) == 3:
+            output, _, crops = output
         elif isinstance(output, tuple) and len(output) == 2:
             output, crops = output
         else:

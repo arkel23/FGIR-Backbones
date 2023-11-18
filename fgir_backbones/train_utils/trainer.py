@@ -7,6 +7,7 @@ import torch
 from timm.models import model_parameters
 
 from .misc_utils import AverageMeter, accuracy, count_params_single, count_params_trainable
+from .calc_acc_voting import accuracy_vote
 from .dist_utils import reduce_tensor, distribute_bn
 from .mix import get_mix
 from .scaler import NativeScaler
@@ -179,7 +180,11 @@ class Trainer():
                 images, targets = self.prepare_batch(batch)
                 output, loss = self.predict(images, targets, train=False)
 
-                acc1, acck = accuracy(output, targets, topk=(1, self.args.top_k))
+                if self.args.cal_voting:
+                    output, y_voting = output
+                    acc1, acck = accuracy_vote(y_voting, targets, self.args.cal_voting, topk=(1, self.args.top_k))
+                else:
+                    acc1, acck = accuracy(output, targets, topk=(1, self.args.top_k))
 
                 torch.cuda.synchronize()
 

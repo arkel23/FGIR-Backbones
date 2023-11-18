@@ -17,9 +17,8 @@ from fgir_backbones.train_utils.calc_loss import OverallLoss
 
 
 IGNORE = ('ckpt_path', 'transfer_learning', 'test_only', 'test_multiple', 'offline',
-          'vis_errors', 'vis_errors_save', 'distributed', 'project_name',
-          'batch_size', 'epochs', 'debugging', 'cpu_workers',
-          'cal_ap_only', 'image_size', 'test_resize_size')
+          'vis_errors', 'vis_errors_save', 'distributed', 'project_name', 'top_k',
+          'batch_size', 'epochs', 'debugging', 'cpu_workers', 'cal_ap_only', 'cal_voting')
 
 
 def adjust_args_general(args):

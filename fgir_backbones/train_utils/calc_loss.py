@@ -37,6 +37,10 @@ class CALLoss(nn.Module):
                           self.cross_entropy_loss(y_pred_aux, y_aux) * 3. / 3. +
                           self.center_loss(feature_matrix, feature_center_batch))
 
+        elif isinstance(output, tuple) and len(output) == 3:
+            y_pred, _, _ = output
+            batch_loss = self.cross_entropy_loss(y_pred, y)
+
         elif isinstance(output, tuple) and len(output) == 2:
             y_pred, _ = output
             batch_loss = self.cross_entropy_loss(y_pred, y)
@@ -72,6 +76,9 @@ class OverallLoss(nn.Module):
         if self.args.selector == 'cal':
             if isinstance(output, tuple) and len(output) == 7:
                 output, _, _, _, _, _, _ = output
+            elif isinstance(output, tuple) and len(output) == 3:
+                y_pred, y_voting, _ = output
+                output = (y_pred, y_voting)
             elif isinstance(output, tuple) and len(output) == 2:
                 output, _ = output
 

@@ -37,9 +37,11 @@ Modifications by / Copyright 2021 Ross Wightman, original copyrights below
 # https://github.com/facebookresearch/deit/
 # https://github.com/facebookresearch/dino
 # --------------------------------------------------------'
+import os
 import math
 from functools import partial
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
+from itertools import product
 
 import torch
 import torch.nn as nn
@@ -51,6 +53,9 @@ from timm.models.helpers import build_model_with_cfg
 from timm.models.layers import PatchEmbed, Mlp, DropPath, trunc_normal_
 from timm.models.registry import register_model
 from timm.models.vision_transformer import checkpoint_filter_fn
+
+
+_USE_SCIPY = int(os.environ.get('TIMM_USE_SCIPY_INTERP', 0)) > 0
 
 
 def _cfg(url='', **kwargs):
@@ -110,6 +115,67 @@ default_cfgs = {
         mean=IMAGENET_DEFAULT_MEAN, std=IMAGENET_DEFAULT_STD
     ),
 }
+
+
+class RegularGridInterpolator:
+    """ Interpolate data defined on a rectilinear grid with even or uneven spacing.
+    Produces similar results to scipy RegularGridInterpolator or interp2d
+    in 'linear' mode.
+
+    Taken from https://github.com/sbarratt/torch_interpolations
+    """
+
+    def __init__(self, points, values):
+        self.points = points
+        self.values = values
+
+        assert isinstance(self.points, tuple) or isinstance(self.points, list)
+        assert isinstance(self.values, torch.Tensor)
+
+        self.ms = list(self.values.shape)
+        self.n = len(self.points)
+
+        assert len(self.ms) == self.n
+
+        for i, p in enumerate(self.points):
+            assert isinstance(p, torch.Tensor)
+            assert p.shape[0] == self.values.shape[i]
+
+    def __call__(self, points_to_interp):
+        assert self.points is not None
+        assert self.values is not None
+
+        assert len(points_to_interp) == len(self.points)
+        K = points_to_interp[0].shape[0]
+        for x in points_to_interp:
+            assert x.shape[0] == K
+
+        idxs = []
+        dists = []
+        overalls = []
+        for p, x in zip(self.points, points_to_interp):
+            idx_right = torch.bucketize(x, p)
+            idx_right[idx_right >= p.shape[0]] = p.shape[0] - 1
+            idx_left = (idx_right - 1).clamp(0, p.shape[0] - 1)
+            dist_left = x - p[idx_left]
+            dist_right = p[idx_right] - x
+            dist_left[dist_left < 0] = 0.
+            dist_right[dist_right < 0] = 0.
+            both_zero = (dist_left == 0) & (dist_right == 0)
+            dist_left[both_zero] = dist_right[both_zero] = 1.
+
+            idxs.append((idx_left, idx_right))
+            dists.append((dist_left, dist_right))
+            overalls.append(dist_left + dist_right)
+
+        numerator = 0.
+        for indexer in product([0, 1], repeat=self.n):
+            as_s = [idx[onoff] for onoff, idx in zip(indexer, idxs)]
+            bs_s = [dist[1 - onoff] for onoff, dist in zip(indexer, dists)]
+            numerator += self.values[as_s] * \
+                torch.prod(torch.stack(bs_s), dim=0)
+        denominator = torch.prod(torch.stack(overalls), dim=0)
+        return numerator / denominator
 
 
 def gen_relative_position_index(window_size: Tuple[int, int]) -> torch.Tensor:
@@ -390,11 +456,323 @@ class Beit(nn.Module):
         return x
 
 
-def _beit_checkpoint_filter_fn(state_dict, model):
-    if 'module' in state_dict:
-        # beit v2 didn't strip module
-        state_dict = state_dict['module']
-    return checkpoint_filter_fn(state_dict, model)
+def resample_abs_pos_embed(
+        posemb,
+        new_size: List[int],
+        old_size: Optional[List[int]] = None,
+        num_prefix_tokens: int = 1,
+        interpolation: str = 'bicubic',
+        antialias: bool = True,
+        verbose: bool = False,
+):
+    # sort out sizes, assume square if old size not provided
+    num_pos_tokens = posemb.shape[1]
+    num_new_tokens = new_size[0] * new_size[1] + num_prefix_tokens
+    if num_new_tokens == num_pos_tokens and new_size[0] == new_size[1]:
+        return posemb
+
+    if old_size is None:
+        hw = int(math.sqrt(num_pos_tokens - num_prefix_tokens))
+        old_size = hw, hw
+
+    if num_prefix_tokens:
+        posemb_prefix, posemb = posemb[:, :num_prefix_tokens], posemb[:, num_prefix_tokens:]
+    else:
+        posemb_prefix, posemb = None, posemb
+
+    # do the interpolation
+    embed_dim = posemb.shape[-1]
+    orig_dtype = posemb.dtype
+    posemb = posemb.float()  # interpolate needs float32
+    posemb = posemb.reshape(1, old_size[0], old_size[1], -1).permute(0, 3, 1, 2)
+    posemb = F.interpolate(posemb, size=new_size, mode=interpolation, antialias=antialias)
+    posemb = posemb.permute(0, 2, 3, 1).reshape(1, -1, embed_dim)
+    posemb = posemb.to(orig_dtype)
+
+    # add back extra (class, etc) prefix tokens
+    if posemb_prefix is not None:
+        posemb = torch.cat([posemb_prefix, posemb], dim=1)
+
+    if not torch.jit.is_scripting() and verbose:
+        print(f'Resized position embedding: {old_size} to {new_size}.')
+
+    return posemb
+
+
+def resample_relative_position_index(
+        posemb,
+        new_size: int,
+        interpolation: str = 'linear',
+        antialias: bool = True,
+        verbose: bool = False,
+):
+    from einops import rearrange
+
+    # sort out sizes, assume square if old size not provided
+    old_size = posemb.shape
+    num_pos_tokens = posemb.shape[1]
+    if new_size == num_pos_tokens:
+        return posemb
+
+    # do the interpolation
+    orig_dtype = posemb.dtype
+    posemb = posemb.float()  # interpolate needs float32
+
+    # resize s2
+    posemb = rearrange(posemb, 's1 s2 -> 1 s1 s2')
+    posemb = F.interpolate(posemb, size=new_size, mode='linear')
+
+    # resize s1
+    posemb = rearrange(posemb, '1 s1 s2_rz -> 1 s2_rz s1')
+    posemb = F.interpolate(posemb, size=new_size, mode='linear')
+
+    # original shape and orgiginal dtype
+    posemb = rearrange(posemb, '1 s2_rz s1_rz -> s1_rz s2_rz')
+    posemb = posemb.to(orig_dtype)
+
+    if not torch.jit.is_scripting() and verbose:
+        print(f'Resized position embedding: {old_size} to {new_size}.')
+
+    return posemb
+
+
+def resize_rel_pos_bias_table(
+        rel_pos_bias,
+        new_window_size: Tuple[int, int],
+        new_bias_shape: Tuple[int, ...],
+):
+    """ Resize relative position bias table using more advanced interpolation.
+
+    Modified from code in Microsoft Unilm (https://github.com/microsoft/unilm) repo (BeiT, BeiT-v2, etc).
+
+    https://github.com/microsoft/unilm/blob/5255d52de86dad642810f5849dd357769346c1d7/beit/run_class_finetuning.py#L351
+
+    Args:
+        rel_pos_bias:
+        new_window_size:
+        new_bias_shape:
+
+    Returns:
+
+    """
+    if _USE_SCIPY:
+        from scipy import interpolate
+
+    dst_size = (new_window_size[0] * 2 - 1, new_window_size[1] * 2 - 1)
+    if rel_pos_bias.ndim == 3:
+        # TF maxvit style (num_heads, H, W) bias shape, no extra tokens currently supported
+        num_extra_tokens = 0
+        _, dst_h, dst_w = new_bias_shape
+        assert dst_h == dst_size[0] and dst_w == dst_size[1]
+        num_attn_heads, src_h, src_w = rel_pos_bias.shape
+        src_size = (src_h, src_w)
+        has_flat_shape = False
+    else:
+        assert rel_pos_bias.ndim == 2
+        # (num_pos, num_heads) (aka flat) bias shape
+        dst_num_pos, _ = new_bias_shape
+        src_num_pos, num_attn_heads = rel_pos_bias.shape
+        num_extra_tokens = dst_num_pos - (dst_size[0] * dst_size[1])
+        src_size = int((src_num_pos - num_extra_tokens) ** 0.5)
+        src_size = (src_size, src_size)
+        has_flat_shape = True
+
+    if src_size[0] != dst_size[0] or src_size[1] != dst_size[1]:
+        # print("Interpolating position from %dx%d to %dx%d" % (src_size[0], src_size[1], dst_size[0], dst_size[1]))
+        if num_extra_tokens:
+            extra_tokens = rel_pos_bias[-num_extra_tokens:, :]
+            rel_pos_bias = rel_pos_bias[:-num_extra_tokens, :]
+        else:
+            extra_tokens = None
+
+        def geometric_progression(a, r, n):
+            return a * (1.0 - r ** n) / (1.0 - r)
+
+        def _calc(src, dst):
+            left, right = 1.01, 1.5
+            while right - left > 1e-6:
+                q = (left + right) / 2.0
+                gp = geometric_progression(1, q, src // 2)
+                if gp > dst // 2:
+                    right = q
+                else:
+                    left = q
+
+            dis = []
+            cur = 1
+            for i in range(src // 2):
+                dis.append(cur)
+                cur += q ** (i + 1)
+            r_ids = [-_ for _ in reversed(dis)]
+            return r_ids + [0] + dis
+
+        y = _calc(src_size[0], dst_size[0])
+        x = _calc(src_size[1], dst_size[1])
+        yx = [torch.tensor(y), torch.tensor(x)]
+        # print("Original positions = %s" % str(x))
+
+        ty = dst_size[0] // 2.0
+        tx = dst_size[1] // 2.0
+        dy = torch.arange(-ty, ty + 0.1, 1.0)
+        dx = torch.arange(-tx, tx + 0.1, 1.0)
+        dyx = torch.meshgrid([dy, dx])
+        # print("Target positions = %s" % str(dx))
+
+        all_rel_pos_bias = []
+        for i in range(num_attn_heads):
+            if has_flat_shape:
+                z = rel_pos_bias[:, i].view(src_size[0], src_size[1]).float()
+            else:
+                z = rel_pos_bias[i, :, :].float()
+
+            if _USE_SCIPY:
+                # Original beit code uses scipy w/ cubic interpolation
+                f = interpolate.interp2d(x, y, z.numpy(), kind='cubic')
+                r = torch.Tensor(f(dx, dy)).contiguous().to(rel_pos_bias.device)
+            else:
+                # Without scipy dependency, I've found a reasonably simple impl
+                # that supports uneven spaced interpolation pts with 'linear' interp.
+                # Results are comparable to scipy for model accuracy in most cases.
+                f = RegularGridInterpolator(yx, z)
+                r = f(dyx).contiguous().to(rel_pos_bias.device)
+
+            if has_flat_shape:
+                r = r.view(-1, 1)
+            all_rel_pos_bias.append(r)
+
+        if has_flat_shape:
+            rel_pos_bias = torch.cat(all_rel_pos_bias, dim=-1)
+        else:
+            rel_pos_bias = torch.cat(all_rel_pos_bias, dim=0)
+
+        if extra_tokens is not None:
+            assert has_flat_shape
+            rel_pos_bias = torch.cat((rel_pos_bias, extra_tokens), dim=0)
+
+    return rel_pos_bias
+
+
+def resample_patch_embed(
+        patch_embed,
+        new_size: List[int],
+        interpolation: str = 'bicubic',
+        antialias: bool = True,
+        verbose: bool = False,
+):
+    """Resample the weights of the patch embedding kernel to target resolution.
+    We resample the patch embedding kernel by approximately inverting the effect
+    of patch resizing.
+
+    Code based on:
+      https://github.com/google-research/big_vision/blob/b00544b81f8694488d5f36295aeb7972f3755ffe/big_vision/models/proj/flexi/vit.py
+
+    With this resizing, we can for example load a B/8 filter into a B/16 model
+    and, on 2x larger input image, the result will match.
+
+    Args:
+        patch_embed: original parameter to be resized.
+        new_size (tuple(int, int): target shape (height, width)-only.
+        interpolation (str): interpolation for resize
+        antialias (bool): use anti-aliasing filter in resize
+        verbose (bool): log operation
+    Returns:
+        Resized patch embedding kernel.
+    """
+    import numpy as np
+    try:
+        import functorch
+        vmap = functorch.vmap
+    except ImportError:
+        if hasattr(torch, 'vmap'):
+            vmap = torch.vmap
+        else:
+            assert False, "functorch or a version of torch with vmap is required for FlexiViT resizing."
+
+    assert len(patch_embed.shape) == 4, "Four dimensions expected"
+    assert len(new_size) == 2, "New shape should only be hw"
+    old_size = patch_embed.shape[-2:]
+    if tuple(old_size) == tuple(new_size):
+        return patch_embed
+
+    if verbose:
+        _logger.info(f"Resize patch embedding {patch_embed.shape} to {new_size}, w/ {interpolation} interpolation.")
+
+    def resize(x_np, _new_size):
+        x_tf = torch.Tensor(x_np)[None, None, ...]
+        x_upsampled = F.interpolate(
+            x_tf, size=_new_size, mode=interpolation, antialias=antialias)[0, 0, ...].numpy()
+        return x_upsampled
+
+    def get_resize_mat(_old_size, _new_size):
+        mat = []
+        for i in range(np.prod(_old_size)):
+            basis_vec = np.zeros(_old_size)
+            basis_vec[np.unravel_index(i, _old_size)] = 1.
+            mat.append(resize(basis_vec, _new_size).reshape(-1))
+        return np.stack(mat).T
+
+    resize_mat = get_resize_mat(old_size, new_size)
+    resize_mat_pinv = torch.Tensor(np.linalg.pinv(resize_mat.T))
+
+    def resample_kernel(kernel):
+        resampled_kernel = resize_mat_pinv @ kernel.reshape(-1)
+        return resampled_kernel.reshape(new_size)
+
+    v_resample_kernel = vmap(vmap(resample_kernel, 0, 0), 1, 1)
+    orig_dtype = patch_embed.dtype
+    patch_embed = patch_embed.float()
+    patch_embed = v_resample_kernel(patch_embed)
+    patch_embed = patch_embed.to(orig_dtype)
+    return patch_embed
+
+
+def _beit_checkpoint_filter_fn(state_dict, model, interpolation='bicubic', antialias=True):
+    state_dict = state_dict.get('model', state_dict)
+    state_dict = state_dict.get('module', state_dict)
+    # beit v2 didn't strip module
+
+    out_dict = {}
+    for k, v in state_dict.items():
+        if 'relative_position_index' in k and v.shape[0] != model.blocks[0].attn.relative_position_index.shape[0]:
+            print(v.shape, model.blocks[0].attn.relative_position_index.shape[0])
+            num_prefix_tokens = 1
+            v = resample_relative_position_index(
+                v,
+                new_size=model.blocks[0].attn.relative_position_index.shape[0],
+                verbose=True,
+            )
+
+        elif 'patch_embed.proj.weight' in k:
+            O, I, H, W = model.patch_embed.proj.weight.shape
+            if v.shape[-1] != W or v.shape[-2] != H:
+                v = resample_patch_embed(
+                    v,
+                    (H, W),
+                    interpolation=interpolation,
+                    antialias=antialias,
+                    verbose=True,
+                )
+        elif k == 'pos_embed' and v.shape[1] != model.pos_embed.shape[1]:
+            # To resize pos embedding when using model at different size from pretrained weights
+            num_prefix_tokens = 1
+            v = resample_abs_pos_embed(
+                v,
+                new_size=model.patch_embed.grid_size,
+                num_prefix_tokens=num_prefix_tokens,
+                interpolation=interpolation,
+                antialias=antialias,
+                verbose=True,
+            )
+        elif k.endswith('relative_position_bias_table'):
+            m = model.get_submodule(k[:-29])
+            if v.shape != m.relative_position_bias_table.shape or m.window_size[0] != m.window_size[1]:
+                v = resize_rel_pos_bias_table(
+                    v,
+                    new_window_size=m.window_size,
+                    new_bias_shape=m.relative_position_bias_table.shape,
+                )
+        out_dict[k] = v
+    return out_dict
 
 
 def _create_beit(variant, pretrained=False, **kwargs):

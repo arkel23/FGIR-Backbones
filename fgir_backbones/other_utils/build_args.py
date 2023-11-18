@@ -196,6 +196,8 @@ def add_model_args(parser):
     parser.add_argument('--selector', type=str, default=None, choices=[None, 'cal'])
     parser.add_argument('--cal_ap_only', action='store_true',
                         help='if true only uses cal for attention pooling (no crops)')
+    parser.add_argument('--cal_voting', type=int, default=None,
+                        help='voting scheme for accuracy: how many top-k voters from each pred')
     # frozen backbone
     parser.add_argument('--freeze_backbone', action='store_true')
     parser.add_argument('--unfreeze_first_conv', action='store_true',

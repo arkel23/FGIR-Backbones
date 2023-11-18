@@ -208,13 +208,14 @@ class WSDAN_CAL(nn.Module):
 
 class CAL(nn.Module):
     def __init__(self, model, seq_len=196, hidden_size=768, num_classes=1000,
-                 bsd=False, device='cpu', cal_ap_only=False):
+                 bsd=False, device='cpu', cal_ap_only=False, cal_voting=None):
         super(CAL, self).__init__()
 
         config = get_cal_config()
         self.beta = config.beta
         self.single_crop = config.single_crop
         self.cal_ap_only = cal_ap_only
+        self.cal_voting = cal_voting
 
         # Network Initialization
         if bsd:
@@ -281,6 +282,50 @@ class CAL(nn.Module):
             y_pred = (y_pred_raw + y_pred_crop3) / 2.
 
             return y_pred, crop_images3
+
+        elif self.cal_voting:
+            x_m = torch.flip(x, [3])
+
+            # Raw Image
+            feature_maps = self.encoder(x)
+            y_pred_raw, _, _, attention_map = self.dfsm(feature_maps)
+
+            feature_maps = self.encoder(x_m)
+            y_pred_raw_m, _, _, attention_map_m = self.dfsm(feature_maps)
+
+            # Object Localization and Refinement
+            crop_images = batch_augment(x, attention_map, mode='crop', theta=0.3, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images)
+            y_pred_crop, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images2 = batch_augment(x, attention_map, mode='crop', theta=0.2, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images2)
+            y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.1, padding_ratio=0.05)
+            feature_maps = self.encoder(crop_images3)
+            y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', theta=0.3, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images_m)
+            y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.2, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images_m2)
+            y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.1, padding_ratio=0.05)
+            feature_maps = self.encoder(crop_images_m3)
+            y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
+
+            y_voting = torch.stack([y_pred_raw, y_pred_crop, y_pred_crop2, y_pred_crop3,
+                                    y_pred_raw_m, y_pred_crop_m, y_pred_crop_m2, y_pred_crop_m3], dim=1)
+
+            y_pred = (y_pred_raw + y_pred_crop + y_pred_crop2 + y_pred_crop3) / 4.
+            y_pred_m = (y_pred_raw_m + y_pred_crop_m + y_pred_crop_m2 + y_pred_crop_m3) / 4.
+            y_pred = (y_pred + y_pred_m) / 2.
+
+            return y_pred, y_voting, crop_images
 
         else:
             x_m = torch.flip(x, [3])

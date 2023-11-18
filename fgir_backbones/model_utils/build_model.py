@@ -186,7 +186,8 @@ class ClassifierModel(nn.Module):
         s, d, bsd = self.get_out_features(args.image_size, model)
 
         if args.selector == 'cal':
-            self.model = CAL(model, s, d, args.num_classes, bsd, args.device, args.cal_ap_only)
+            self.model = CAL(model, s, d, args.num_classes, bsd, args.device,
+                             args.cal_ap_only, args.cal_voting)
         else:
             self.model = get_backbone(args)
             self.head = Head(args.classifier, d, args.num_classes, bsd, args.class_proj_size)
