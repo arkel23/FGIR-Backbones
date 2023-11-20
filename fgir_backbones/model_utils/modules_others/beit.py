@@ -734,8 +734,6 @@ def _beit_checkpoint_filter_fn(state_dict, model, interpolation='bicubic', antia
     out_dict = {}
     for k, v in state_dict.items():
         if 'relative_position_index' in k and v.shape[0] != model.blocks[0].attn.relative_position_index.shape[0]:
-            print(v.shape, model.blocks[0].attn.relative_position_index.shape[0])
-            num_prefix_tokens = 1
             v = resample_relative_position_index(
                 v,
                 new_size=model.blocks[0].attn.relative_position_index.shape[0],
