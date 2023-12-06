@@ -151,6 +151,13 @@ def get_backbone(args):
         model = ViT(cfg, pretrained=args.pretrained)
         # cfg = cfg
 
+    elif 'deit' in args.model_name:
+        args.classifier = 'cls' if args.classifier is None else args.classifier
+        args.classifier = 'pool' if args.selector == 'cal' else args.classifier
+        cls = True if args.classifier == 'cls' else False
+        model = timm.create_model(
+            args.model_name, pretrained=args.pretrained, num_classes=0, class_token=cls,
+            img_size=args.image_size, drop_path_rate=args.sd, global_pool='')
     elif 'beitv2' in args.model_name:
         args.classifier = 'cls' if args.classifier is None else args.classifier
         args.classifier = 'pool' if args.selector == 'cal' else args.classifier
@@ -163,7 +170,8 @@ def get_backbone(args):
             pretrained=args.pretrained,img_size=args.image_size, drop_path_rate=args.sd)
     elif 'vgg' in args.model_name:
         model = timm.create_model(args.model_name, pretrained=args.pretrained,
-                                        num_classes=0, global_pool='')
+                                  num_classes=0, global_pool='',
+                                  pre_logits=False if args.selector == 'cal' else True)
     elif any(model in args.model_name for model in ['resnet', 'convnext']):
         model = timm.create_model(
             args.model_name, pretrained=args.pretrained, num_classes=0,
