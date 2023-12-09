@@ -7,6 +7,7 @@ augs='weakaugs'
 ls=''
 sd=''
 freeze_backbone=''
+two_seeds=''
 
 device=0
 serial=1
@@ -19,7 +20,7 @@ model_name='vit_b16 --classifier cls --cfg_method configs/methods/glsim.yaml'
 lr_array=('0.03' '0.01' '0.003' '0.001')
 seed_array=('1' '10' '100')
 
-VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,med_augs,ls,sd,freeze_backbone,device:,serial:,seed:,lr:,dataset_name:,model_name: -- "$@")
+VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,med_augs,ls,sd,freeze_backbone,two_seeds,device:,serial:,seed:,lr:,dataset_name:,model_name: -- "$@")
 if [[ $? -ne 0 ]]; then
     exit 1;
 fi
@@ -54,6 +55,10 @@ while [ : ]; do
     --freeze_backbone)
         freeze_backbone=' --freeze_backbone'
         lr_array=('0.3' '0.1' '0.03' '0.01' '0.003')
+        shift 1
+        ;;
+    --two_seeds)
+        seed_array=('1' '10')
         shift 1
         ;;
     --device)
