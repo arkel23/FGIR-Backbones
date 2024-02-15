@@ -95,7 +95,7 @@ def main():
 
     if args.test_only:
         if not args.vis_errors and not args.debugging and not args.offline:
-            wandb.init(config=args, project=args.project_name)
+            wandb.init(config=args, project=args.project_name, entity=args.entity)
             wandb.run.name = args.run_name
         time_start = time.time()
         print(args, model.cfg)
@@ -117,7 +117,7 @@ def main():
     else:
         if args.local_rank == 0:
             if not args.debugging and not args.offline:
-                wandb.init(config=args, project=args.project_name)
+                wandb.init(config=args, project=args.project_name, entity=args.entity)
                 wandb.run.name = args.run_name
             if not args.distributed:
                 print(model, model.cfg)

@@ -80,6 +80,7 @@ def add_common_args():
     # general
     parser.add_argument('--project_name', type=str, default='Backbones',
                         help='project name for wandb')
+    parser.add_argument('--entity', type=str, default=None, help='wandb entity')
     parser.add_argument('--debugging', action='store_true',
                         help='when true disables wandb and exits after a single pass')
     parser.add_argument('--serial', default=0, type=int, help='serial number for run')
@@ -198,6 +199,7 @@ def add_model_args(parser):
                         help='if true only uses cal for attention pooling (no crops)')
     parser.add_argument('--cal_voting', type=int, default=None,
                         help='voting scheme for accuracy: how many top-k voters from each pred')
+    parser.add_argument('--cal_attention_pool', action='store_true')
     # frozen backbone
     parser.add_argument('--freeze_backbone', action='store_true')
     parser.add_argument('--unfreeze_first_conv', action='store_true',

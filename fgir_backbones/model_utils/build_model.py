@@ -195,7 +195,7 @@ class ClassifierModel(nn.Module):
 
         if args.selector == 'cal':
             self.model = CAL(model, s, d, args.num_classes, bsd, args.device,
-                             args.cal_ap_only, args.cal_voting)
+                             args.cal_ap_only, args.cal_voting, args.cal_attention_pool)
         else:
             self.model = get_backbone(args)
             self.head = Head(args.classifier, d, args.num_classes, bsd, args.class_proj_size)
