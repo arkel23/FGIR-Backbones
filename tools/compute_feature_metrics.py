@@ -278,6 +278,31 @@ class Distances:
         if show:
             plt.show()
 
+    def plot_norms(self,
+                   save_path: str = None,
+                   title: str = None,
+                   show: bool = False):
+        fig, ax = plt.subplots()
+
+        labels = range(self.l2_norm.shape[0])
+
+        ax.bar(labels, self.l2_norm.cpu())
+        ax.set_xlabel("Layer", fontsize=15)
+        ax.set_ylabel("L2-Norm", fontsize=15)
+
+        if title is not None:
+            ax.set_title(f"{title}", fontsize=18)
+        else:
+            ax.set_title(f"L2-Norm Distribution As Function of Layer", fontsize=18)
+
+        plt.tight_layout()
+
+        if save_path is not None:
+            plt.savefig(save_path, dpi=300)
+
+        if show:
+            plt.show()
+
 
 def calc_cka(results):
     cka_first = torch.mean(results['CKA'][0, 1:].flatten()).item()
