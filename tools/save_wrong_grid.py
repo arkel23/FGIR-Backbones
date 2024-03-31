@@ -225,8 +225,10 @@ def main(transform=None, model=None):
 
     parser.add_argument('--preds_path', type=str, required=True,
                         help='path to ind_preds.csv (results_train/dataset_model/ind_preds.csv)')
+    parser.add_argument("--cfg", type=str, required=True,
+                        help="If using it overwrites args and reads yaml file in given path")
 
-    parser.add_argument('--wrong_preds_only', action='store_true',
+    parser.add_argument('--wrong_preds_only', action='store_false',
                         help='by default only saves wrong preds (if use flag saves all)')
     parser.add_argument('--prob_th', type=float, default=None,
                         help='filter confidently wrong')
@@ -264,6 +266,9 @@ def main(transform=None, model=None):
     parser.add_argument('--ppt', action='store_true', help='patch prompt tuning')
     parser.add_argument('--freeze_backbone', action='store_true')
     parser.add_argument('--dynamic_top', type=int, default=8)
+    parser.add_argument('--cal_ap_only', type=bool, default=False)
+    parser.add_argument('--cal_voting', type=bool, default=False)
+    parser.add_argument('--cal_attention_pool', type=bool, default=False)
 
     # augs
     parser.add_argument('--resize_size', type=int, default=None, help='resize_size before cropping')
@@ -296,9 +301,6 @@ def main(transform=None, model=None):
     parser.add_argument('--train_trainval', action='store_false',
                         help='when true uses trainval for train and evaluates on test \
                         otherwise use train for train and evaluates on val')
-
-    parser.add_argument("--cfg", type=str,
-                        help="If using it overwrites args and reads yaml file in given path")
 
     args = parser.parse_args()
 

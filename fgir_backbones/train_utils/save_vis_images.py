@@ -98,6 +98,6 @@ def save_samples(images, output, train, curr_iter, saved, args):
 def save_images(images, fp, img_sz, custom_mean_std):
     with torch.no_grad():
         samples = images.reshape(-1, 3, img_sz, img_sz)
-        samples = inverse_normalize(images.data, custom_mean_std)
+        samples = inverse_normalize(samples.data, custom_mean_std)
         save_image(samples, fp, nrow=int(np.sqrt(samples.shape[0])))
     return 0

@@ -1,6 +1,7 @@
 # https://github.com/Lyken17/pytorch-OpCounter
 # https://github.com/sovrasov/flops-counter.pytorch
 # https://github.com/zhijian-liu/torchprofile
+import os
 import torch
 from thop import profile
 from ptflops import get_model_complexity_info
@@ -12,9 +13,13 @@ from fgir_backbones import ViTConfig
 from fgir_backbones.model_utils.modules_others.bit import resnetv2_101x3_bitm_in21k
 
 
-MODELS = ('vgg19_bn', 'resnet101', 'resnetv2_101x3_bitm_in21k', 'vit_b16',
-          'swin_base_patch4_window7_224_in22k', 'resnetv2_101', 'convnext_base_in22k',
-          'van_b3', 'beitv2_base_patch16_224_in22k')
+MODELS = (
+    'vgg19_bn', 'resnet101', 'resnetv2_101x3_bitm_in21k', 'vit_b16',
+    'swin_large_patch4_window7_224_in22k', 'swin_base_patch4_window7_224_in22k',
+    'swin_base_patch4_window7_224', 'resnetv2_101', 'convnext_large_in22k',
+    'convnext_base_in22k', 'convnext_base', 'van_b3',
+    'deit3_large_patch16_224_in21ft1k', 'deit3_base_patch16_224_in21ft1k',
+    'deit3_base_patch16_224', 'beitv2_base_patch16_224_in22k')
 
 
 def count_params(model):
@@ -67,6 +72,10 @@ def main():
 
     x = torch.rand(1, 3, 224, 224).to(args.device)
 
+    results_fp = os.path.join(args.results_dir, 'flops.csv')
+    with open(results_fp, 'w') as file:
+        file.write('model_name,no_params_in1k,gmacs_thop,gmacs_ptflops,gmacs_torchprofile\n')
+
     for name in MODELS:
         args.model_name = name
         if name == 'resnetv2_101x3_bitm_in21k':
@@ -87,7 +96,10 @@ def main():
         macs3 = profile_macs(model, x)
         macs3 = macs3 / 1e9
 
-        print(name, params, macs, macs2, macs3)
+        line = f'{name},{params},{macs},{macs2},{macs3}\n'
+        print(line)
+        with open(results_fp, 'a') as file:
+            file.write(line)
 
         if 'vit' in name:
             cfg = ViTConfig(model_name=args.model_name)
@@ -95,6 +107,7 @@ def main():
                 image_size=args.image_size, patch_size=cfg.patch_size[0],
                 hidden_size=cfg.hidden_size, layers=cfg.num_hidden_layers, num_classes=1000).get_flops()
             print('{}: {:.2f} GFLOPs'.format(name, (flops / (1e9))))
+
 
 if __name__ == "__main__":
     main()

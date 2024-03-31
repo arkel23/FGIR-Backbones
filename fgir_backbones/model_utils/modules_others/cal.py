@@ -212,6 +212,7 @@ class AttentionPool(nn.Module):
         self.cls_token = nn.Parameter(torch.rand(1, 1, dim_inner))
 
         self.norm1 = nn.LayerNorm(dim_in)
+        # self.proj_qkv = nn.Linear(dim_in, dim_inner * 3, bias=True)
         self.proj_q = nn.Linear(dim_in, dim_inner, bias=True)
         self.proj_kv = nn.Linear(dim_in, dim_inner * 2, bias=True)
 
@@ -231,7 +232,7 @@ class AttentionPool(nn.Module):
         )
 
         self.norm3 = nn.LayerNorm(dim_in)
-        self.classifier = nn.Linear(dim_in, dim_in)
+        # self.classifier = nn.Linear(dim_in, dim_in)
 
         # layerscale code (init_values: 1e-5 for dinov2) taken from
         # https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
@@ -264,9 +265,11 @@ class AttentionPool(nn.Module):
         # q = self.cls_token
         # k, v = self.proj_kv(x).chunk(2, dim=-1)
         h = self.norm1(x)
-        q = self.proj_q(reduce(h, 'b s k -> b 1 k', 'mean'))
+        # q = self.proj_q(reduce(h, 'b s k -> b 1 k', 'mean'))
+        q = self.proj_q(h[:, :1, :])
         k, v = self.proj_kv(h).chunk(2, dim=-1)
-
+        # q, k, v = self.proj_qkv(h).chunk(3, dim=-1)
+        
         q, k, v = map(lambda t: rearrange(t, 'b s (h w) -> b h s w', h=self.heads), [q, k, v])
 
         if hasattr(self, 'eff_attention'):
@@ -284,6 +287,7 @@ class AttentionPool(nn.Module):
         out = rearrange(out, 'b h s w -> b s (h w)')
         # out = reduce(x, 'b s k -> b 1 k', 'mean') + self.drop_path(self.ls(self.proj_out(out)))
         x = reduce(x, 'b s k -> b 1 k', 'mean') + self.drop_path(self.ls(self.proj_out(out)))
+        # x = x + self.drop_path(self.ls(self.proj_out(out)))
         # out = F.softmax(self.proj_out(out), dim=-1)
         # out = self.cls_token + self.drop_path(self.ls(self.proj_out(out)))
 
@@ -291,6 +295,7 @@ class AttentionPool(nn.Module):
         x = x + self.drop_path2(self.ls2(self.pwffn(self.norm2(x))))
 
         x = self.norm3(x)
+        # x = reduce(x, 'b s d -> b d', 'mean')
         # x = self.classifier(x)
         # return self.norm(out[:, 0, :])
         return x
@@ -440,9 +445,9 @@ class CAL(nn.Module):
             num_classes, config.num_attention_maps * hidden_size, device=device)
 
         if attention_pool:
-            #self.attention_pool = AttentionPool(
-            #    num_classes, 1, num_classes, drop_prob=0.0, drop_path=0.0, init_values=0)
-            self.attention_pool = TSMPool(num_classes, drop_path=0.1, init_values=1e-5)
+            self.attention_pool = AttentionPool(
+                num_classes, num_classes, 4, drop_prob=0.0, drop_path=0.1, init_values=1e-5)
+            # self.attention_pool = TSMPool(num_classes, drop_path=0.1, init_values=1e-5)
 
         print('WSDAN: num_attention_maps: {}'.format(config.num_attention_maps))
 
@@ -459,7 +464,7 @@ class CAL(nn.Module):
             # attention cropping
             with torch.no_grad():
                 crop_images = batch_augment(
-                    x, attention_map[:, :1, :, :], mode='crop', theta=(0.4, 0.6), padding_ratio=0.1)
+                    x, attention_map[:, :1, :, :], mode='crop', theta=(0.3, 0.7), padding_ratio=0.1)
                 drop_images = batch_augment(x, attention_map[:, 1:, :, :], mode='drop', theta=(0.2, 0.5))
             aug_images = torch.cat([crop_images, drop_images], dim=0)
 
@@ -538,27 +543,27 @@ class CAL(nn.Module):
             y_pred_raw_m, _, _, attention_map_m = self.dfsm(feature_maps)
 
             # Object Localization and Refinement
-            crop_images = batch_augment(x, attention_map, mode='crop', theta=0.3, padding_ratio=0.1)
+            crop_images = batch_augment(x, attention_map, mode='crop', theta=0.7, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images)
             y_pred_crop, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images2 = batch_augment(x, attention_map, mode='crop', theta=0.2, padding_ratio=0.1)
+            crop_images2 = batch_augment(x, attention_map, mode='crop', theta=0.5, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images2)
             y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.1, padding_ratio=0.05)
+            crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.3, padding_ratio=0.05)
             feature_maps = self.encoder(crop_images3)
             y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', theta=0.3, padding_ratio=0.1)
+            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', theta=0.6, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m)
             y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.2, padding_ratio=0.1)
+            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.4, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m2)
             y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.1, padding_ratio=0.05)
+            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.2, padding_ratio=0.05)
             feature_maps = self.encoder(crop_images_m3)
             y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
 
@@ -579,27 +584,27 @@ class CAL(nn.Module):
             y_pred_raw_m, _, _, attention_map_m = self.dfsm(feature_maps)
 
             # Object Localization and Refinement
-            crop_images = batch_augment(x, attention_map, mode='crop', theta=0.3, padding_ratio=0.1)
+            crop_images = batch_augment(x, attention_map, mode='crop', theta=0.7, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images)
             y_pred_crop, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images2 = batch_augment(x, attention_map, mode='crop', theta=0.2, padding_ratio=0.1)
+            crop_images2 = batch_augment(x, attention_map, mode='crop', theta=0.5, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images2)
             y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.1, padding_ratio=0.05)
+            crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.3, padding_ratio=0.05)
             feature_maps = self.encoder(crop_images3)
             y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', theta=0.3, padding_ratio=0.1)
+            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', theta=0.6, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m)
             y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.2, padding_ratio=0.1)
+            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.4, padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m2)
             y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.1, padding_ratio=0.05)
+            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.2, padding_ratio=0.05)
             feature_maps = self.encoder(crop_images_m3)
             y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
 
