@@ -80,7 +80,7 @@ def add_common_args():
     # general
     parser.add_argument('--project_name', type=str, default='Backbones',
                         help='project name for wandb')
-    parser.add_argument('--entity', type=str, default=None, help='wandb entity')
+    parser.add_argument('--entity', type=str, default='nycu_pcs', help='wandb entity')
     parser.add_argument('--debugging', action='store_true',
                         help='when true disables wandb and exits after a single pass')
     parser.add_argument('--serial', default=0, type=int, help='serial number for run')

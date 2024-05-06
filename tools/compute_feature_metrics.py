@@ -385,7 +385,7 @@ def compute_cka_dataset(args):
     args = adjust_args_general(args)
 
     if not args.debugging:
-        wandb.init(config=args, project=args.project_name)
+        wandb.init(config=args, project=args.project_name, entity=args.entity)
         wandb.run.name = args.run_name
 
     if args.model_name == 'vgg19_bn':
