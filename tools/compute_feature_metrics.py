@@ -280,9 +280,13 @@ class Distances:
     def plot_cka(self,
                  save_path: str = None,
                  title: str = None,
-                 show: bool = False):
+                 show: bool = False,
+                 pooled: bool = False):
         fig, ax = plt.subplots()
-        im = ax.imshow(self.hsic_matrix, origin='lower', cmap='magma')
+        if pooled:
+            im = ax.imshow(self.hsic_matrix_pooled, origin='lower', cmap='magma')
+        else:
+            im = ax.imshow(self.hsic_matrix, origin='lower', cmap='magma')
         ax.set_xlabel(f"Layers {self.model1_info['Name']}", fontsize=15)
         ax.set_ylabel(f"Layers {self.model1_info['Name']}", fontsize=15)
 
@@ -414,14 +418,16 @@ def compute_cka_dataset(args):
     elif args.selector == 'cal':
         layers = [layer.replace('model.', 'model.encoder.') for layer in layers]
 
-    distances = Distances(model, args.model, layers, args.device, args.input_size)
+    distances = Distances(model, args.model_name, layers, args.device,
+                          args.image_size, debugging=args.debugging)
 
     with torch.no_grad():
         distances.compare(train_loader)
 
         results_train = distances.export()
-        distances.plot_cka(os.path.join(args.output_dir, 'cka_train.png'))
-        distances.plot_norms(os.path.join(args.output_dir, 'norms_train.png'))
+        distances.plot_cka(os.path.join(args.results_dir, 'cka_train.png'))
+        distances.plot_cka(os.path.join(args.results_dir, 'cka_pooled_train.png'), pooled=True)
+        distances.plot_norms(os.path.join(args.results_dir, 'norms_train.png'))
 
         cka_first_train, cka_last_train, cka_avg_train = calc_cka(results_train)
         cka_pooled_first_train, cka_pooled_last_train, cka_pooled_avg_train = calc_cka(results_train, pooled=True)
@@ -435,8 +441,9 @@ def compute_cka_dataset(args):
         distances.compare(test_loader)
 
         results_test = distances.export()
-        distances.plot_cka(os.path.join(args.output_dir, 'cka_test.png'))
-        distances.plot_norms(os.path.join(args.output_dir, 'norms_test.png'))
+        distances.plot_cka(os.path.join(args.results_dir, 'cka_test.png'))
+        distances.plot_cka(os.path.join(args.results_dir, 'cka_pooled_test.png'), pooled=True)
+        distances.plot_norms(os.path.join(args.results_dir, 'norms_test.png'))
 
         cka_first_test, cka_last_test, cka_avg_test = calc_cka(results_test)
         cka_pooled_first_test, cka_pooled_last_test, cka_pooled_avg_test = calc_cka(results_test, pooled=True)
@@ -459,7 +466,7 @@ def compute_cka_dataset(args):
     values = f'''{args.dataset_name},{args.model_name},{setting},{cka_avg_train},{cka_first_train},{cka_last_train},{dist_avg_train},{dist_avg_norm_train},{dist_first_train},{dist_first_norm_train},{dist_last_train},{dist_last_norm_train},{l2_norm_avg_train},{l2_norm_first_train},{l2_norm_last_train},{cka_avg_test},{cka_first_test},{cka_last_test},{dist_avg_test},{dist_avg_norm_test},{dist_first_test},{dist_first_norm_test},{dist_last_test},{dist_last_norm_test},{l2_norm_avg_test},{l2_norm_first_test},{l2_norm_last_test}\n'''
     print(title, values)
 
-    values = f'''{args.dataset_name},{args.model},{setting},{cka_avg_train},{cka_first_train},{cka_last_train},{cka_pooled_avg_train},{cka_pooled_first_train},{cka_pooled_last_train},{dist_avg_train},{dist_avg_norm_train},{dist_first_train},{dist_first_norm_train},{dist_last_train},{dist_last_norm_train},{l2_norm_avg_train},{l2_norm_first_train},{l2_norm_last_train},{cka_avg_test},{cka_first_test},{cka_last_test},{cka_pooled_avg_test},{cka_pooled_first_test},{cka_pooled_last_test},{dist_avg_test},{dist_avg_norm_test},{dist_first_test},{dist_first_norm_test},{dist_last_test},{dist_last_norm_test},{l2_norm_avg_test},{l2_norm_first_test},{l2_norm_last_test}\n'''
+    values = f'''{args.dataset_name},{args.model_name},{setting},{cka_avg_train},{cka_first_train},{cka_last_train},{cka_pooled_avg_train},{cka_pooled_first_train},{cka_pooled_last_train},{dist_avg_train},{dist_avg_norm_train},{dist_first_train},{dist_first_norm_train},{dist_last_train},{dist_last_norm_train},{l2_norm_avg_train},{l2_norm_first_train},{l2_norm_last_train},{cka_avg_test},{cka_first_test},{cka_last_test},{cka_pooled_avg_test},{cka_pooled_first_test},{cka_pooled_last_test},{dist_avg_test},{dist_avg_norm_test},{dist_first_test},{dist_first_norm_test},{dist_last_test},{dist_last_norm_test},{l2_norm_avg_test},{l2_norm_first_test},{l2_norm_last_test}\n'''
     print(title, values)
 
     if not args.debugging:
