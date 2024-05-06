@@ -19,23 +19,33 @@ class CenterLoss(nn.Module):
 
 # Overall CAL Loss
 class CALLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, cm=False):
         super(CALLoss, self).__init__()
         self.cross_entropy_loss = nn.CrossEntropyLoss()
         self.center_loss = CenterLoss()
+        self.cm = cm
 
     def forward(self, output, y):
         if isinstance(output, tuple) and len(output) == 7:
             (_, y_pred_raw, y_pred_aux, feature_matrix, feature_center_batch,
              y_pred_aug, _) = output
 
-            y_aug = torch.cat([y, y], dim=0)
-            y_aux = torch.cat([y, y_aug], dim=0)
+            if self.cm:
+                y_aug = torch.cat([y, y, y], dim=0)
+                y_aux = torch.cat([y, y_aug], dim=0)
+
+                batch_loss = (self.cross_entropy_loss(y_pred_raw, y) / 3. +
+                            self.cross_entropy_loss(y_pred_aug, y_aug) * 3. / 3. +
+                            self.cross_entropy_loss(y_pred_aux, y_aux) * 4. / 3. +
+                            self.center_loss(feature_matrix, feature_center_batch))
+            else:
+                y_aug = torch.cat([y, y], dim=0)
+                y_aux = torch.cat([y, y_aug], dim=0)
  
-            batch_loss = (self.cross_entropy_loss(y_pred_raw, y) / 3. +
-                          self.cross_entropy_loss(y_pred_aug, y_aug) * 2. / 3. +
-                          self.cross_entropy_loss(y_pred_aux, y_aux) * 3. / 3. +
-                          self.center_loss(feature_matrix, feature_center_batch))
+                batch_loss = (self.cross_entropy_loss(y_pred_raw, y) / 3. +
+                            self.cross_entropy_loss(y_pred_aug, y_aug) * 2. / 3. +
+                            self.cross_entropy_loss(y_pred_aux, y_aux) * 3. / 3. +
+                            self.center_loss(feature_matrix, feature_center_batch))
 
         elif isinstance(output, tuple) and len(output) == 3:
             y_pred, _, _ = output
@@ -58,7 +68,7 @@ class OverallLoss(nn.Module):
         self.args = args
 
         if args.selector == 'cal':
-            self.criterion = CALLoss()
+            self.criterion = CALLoss(args.cal_cm)
         elif args.focal_gamma:
             self.criterion = FocalLoss(args.focal_gamma, smoothing=args.ls)
         elif args.ls:

@@ -64,37 +64,6 @@ def freeze_backbone(args, model):
 
     print('Total parameters (M): ', sum([p.numel() for p in model.parameters()]) / (1e6))
     print('Trainable parameters (M): ', sum([p.numel() for p in model.parameters() if p.requires_grad]) / (1e6))
-
-
-def get_first_conv_kernel_stride(args):
-    if args.model_name in VITS:
-        name = args.model_name.split('_')[-1]
-        pattern = r'[a-zA-Z](\d+)'
-        patch_size = int(re.search(pattern, name).group(1))
-        stride = patch_size
-    elif 'vgg' in args.model_name:
-        patch_size = 3
-        stride = 1
-    elif 'van' in args.model_name:
-        # https://github.com/Visual-Attention-Network/VAN-Classification/blob/main/models/van.py#L129
-        patch_size = 7
-        stride = 4
-    elif any(name in args.model_name for name in ['swin', 'convnext']):
-        patch_size = 4
-        stride = 4
-    elif 'resnet' in args.model_name:
-        patch_size = 7
-        stride = 2
-    elif 'beit' in args.model_name:
-        patch_size = 16
-        stride = 16
-    else:
-        raise NotImplementedError
-
-    args.patch_kernel = patch_size
-    args.patch_stride = stride
-            
-    return None
         
 
 def load_model_compatibility_mode(args, model):
@@ -195,20 +164,13 @@ class ClassifierModel(nn.Module):
 
         if args.selector == 'cal':
             self.model = CAL(model, s, d, args.num_classes, bsd, args.device,
-                             args.cal_ap_only, args.cal_voting, args.cal_attention_pool)
+                             args.cal_topk_crop, args.cal_da_pool,
+                             args.cal_ap_only, args.cal_voting, args.cal_cm)
         else:
             self.model = get_backbone(args)
             self.head = Head(args.classifier, d, args.num_classes, bsd, args.class_proj_size)
 
         self.cfg = SimpleNamespace(**{'seq_len': s, 'hidden_size': d, 'num_channels': 3})
-
-        if args.ppt:
-            get_first_conv_kernel_stride(args)
-            patch_size = args.patch_stride if args.prompt_stride else args.patch_kernel
-            # self.prompt = PatchPromptTuning(self.cfg.num_channels, patch_size, args.prompt_len)
-            self.prompt = PatchPromptTuning(
-                args.prompt_len, self.cfg.num_channels, args.image_size, patch_size,
-                num_layers=args.prompt_layers, dim_hidden=args.prompt_dim, sd=0.1)
 
     @torch.no_grad()
     def get_out_features(self, image_size, model):
@@ -226,9 +188,6 @@ class ClassifierModel(nn.Module):
         return s, d, bsd
 
     def forward(self, images, targets=None, ret_inter=False):
-        if hasattr(self, 'prompt'):
-            images = self.prompt(images)
-
         if hasattr(self, 'head'):
             if (self.model_name in VITS or 'beit' in self.model_name) and ret_inter:
                 features, scores = self.model(images, ret_inter)

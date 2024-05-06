@@ -55,7 +55,8 @@ class Distances:
                  model1_layers: List[str] = None,
                  device: str ='cpu',
                  image_size: int = 224,
-                 out_size: int = 4):
+                 out_size: int = 4,
+                 debugging: bool = False):
         """
 
         :param model1: (nn.Module) Neural Network 1
@@ -94,6 +95,8 @@ class Distances:
         self._check_shape(image_size)
 
         self.pool = nn.AdaptiveAvgPool2d((out_size, out_size)).to(self.device)
+
+        self.debugging = debugging
 
         print(self.model1_info)
 
@@ -156,8 +159,8 @@ class Distances:
         result -= ((ones.t() @ K @ L @ ones) * 2 / (N - 2)).item()
         return (1 / (N * (N - 3)) * result).item()
 
-    def _pool_features(self, feat):
-        if hasattr(self, 'pool'):
+    def _pool_features(self, feat, pool=True):
+        if hasattr(self, 'pool') and pool:
             if len(feat.shape) == 4:
                 if not self.bchw:
                     feat = rearrange(feat, 'b h w c -> b c h w')
@@ -194,6 +197,7 @@ class Distances:
         N = len(self.model1_layers) if self.model1_layers is not None else len(list(self.model1.modules()))
 
         self.hsic_matrix = torch.zeros(N, N, 3)
+        self.hsic_matrix_pooled = torch.zeros(N, N, 3)
         self.dist_cum = torch.zeros(N, device=self.device)
         self.dist_cum_norm = torch.zeros(N, device=self.device)
         self.l2_norm = torch.zeros(N, device=self.device)
@@ -208,12 +212,13 @@ class Distances:
 
             for i, (name1, feat1) in enumerate(self.model1_features.items()):
 
-                X = self._pool_features(feat1)
+                X = self._pool_features(feat1, pool=False)
+                X_pooled = self._pool_features(feat1, pool=True)
 
                 # frobenius norm
-                self.l2_norm[i] += torch.norm(X, p='fro', dim=-1).mean() / num_batches
+                self.l2_norm[i] += torch.norm(X_pooled, p='fro', dim=-1).mean() / num_batches
 
-                dist = torch.cdist(X, X, p=2.0)
+                dist = torch.cdist(X_pooled, X_pooled, p=2.0)
 
                 dist_avg = (torch.sum(dist) / torch.nonzero(dist).size(0))
                 self.dist_cum[i] += dist_avg / num_batches
@@ -226,18 +231,34 @@ class Distances:
                 K.fill_diagonal_(0.0)
                 self.hsic_matrix[i, :, 0] += self._HSIC(K, K) / num_batches
 
+                K_pooled = X_pooled @ X_pooled.t()
+                K_pooled.fill_diagonal_(0.0)
+                self.hsic_matrix_pooled[i, :, 0] += self._HSIC(K_pooled, K_pooled) / num_batches
+
                 for j, (name2, feat2) in enumerate(self.model1_features.items()):
-                    Y = self._pool_features(feat2)
+                    Y = self._pool_features(feat2, pool=False)
+                    Y_pooled = self._pool_features(feat2, pool=True)
 
                     L = Y @ Y.t()
                     L.fill_diagonal_(0)
+
+                    L_pooled = Y_pooled @ Y_pooled.t()
+                    L_pooled.fill_diagonal_(0)
+
                     assert K.shape == L.shape, f"Feature shape mistach! {K.shape}, {L.shape}"
+                    assert K_pooled.shape == L_pooled.shape, f"Feature shape mistach! {K_pooled.shape}, {L_pooled.shape}"
 
                     self.hsic_matrix[i, j, 1] += self._HSIC(K, L) / num_batches
                     self.hsic_matrix[i, j, 2] += self._HSIC(L, L) / num_batches
 
+                    self.hsic_matrix_pooled[i, j, 1] += self._HSIC(K_pooled, L_pooled) / num_batches
+                    self.hsic_matrix_pooled[i, j, 2] += self._HSIC(L_pooled, L_pooled) / num_batches
+
         self.hsic_matrix = self.hsic_matrix[:, :, 1] / (self.hsic_matrix[:, :, 0].sqrt() *
                                                         self.hsic_matrix[:, :, 2].sqrt())
+        self.hsic_matrix_pooled = self.hsic_matrix_pooled[:, :, 1] / (self.hsic_matrix_pooled[:, :, 0].sqrt() *
+                                                        self.hsic_matrix_pooled[:, :, 2].sqrt())
+
 
     def export(self) -> Dict:
         """
@@ -248,6 +269,7 @@ class Distances:
             "model1_name": self.model1_info['Name'],
             'l2_norm': self.l2_norm,
             "CKA": self.hsic_matrix,
+            "CKA_pooled": self.hsic_matrix_pooled,
             "dist": self.dist_cum,
             "dist_norm": self.dist_cum_norm,
             "model1_layers": self.model1_info['Layers'],
@@ -256,9 +278,9 @@ class Distances:
         }
 
     def plot_cka(self,
-                     save_path: str = None,
-                     title: str = None,
-                     show: bool = False):
+                 save_path: str = None,
+                 title: str = None,
+                 show: bool = False):
         fig, ax = plt.subplots()
         im = ax.imshow(self.hsic_matrix, origin='lower', cmap='magma')
         ax.set_xlabel(f"Layers {self.model1_info['Name']}", fontsize=15)
@@ -274,6 +296,10 @@ class Distances:
 
         if save_path is not None:
             plt.savefig(save_path, dpi=300)
+
+        if not self.debugging:
+            fn = os.path.splitext(os.path.split(save_path)[-1])[0]
+            wandb.log({fn: wandb.Image(fig)})
 
         if show:
             plt.show()
@@ -300,20 +326,25 @@ class Distances:
         if save_path is not None:
             plt.savefig(save_path, dpi=300)
 
+        if not self.debugging:
+            fn = os.path.splitext(os.path.split(save_path)[-1])[0]
+            wandb.log({fn: wandb.Image(fig)})
+
         if show:
             plt.show()
 
 
-def calc_cka(results):
-    cka_first = torch.mean(results['CKA'][0, 1:].flatten()).item()
+def calc_cka(results, pooled=False):
+    name = 'CKA_pooled' if pooled else 'CKA'
+    cka_first = torch.mean(results[name][0, 1:].flatten()).item()
 
-    num_layers = results['CKA'].shape[0]
+    num_layers = results[name].shape[0]
     mask = torch.triu(torch.ones(num_layers, num_layers))
     mask -= torch.eye(num_layers)
-    masked = results['CKA'] * mask
+    masked = results[name] * mask
     cka_avg = (torch.sum(masked) / torch.nonzero(masked).size(0)).item()
 
-    cka_last = torch.mean(results['CKA'][-1, :-1]).item()
+    cka_last = torch.mean(results[name][-1, :-1]).item()
 
     return cka_first, cka_last, cka_avg
 
@@ -383,15 +414,17 @@ def compute_cka_dataset(args):
     elif args.selector == 'cal':
         layers = [layer.replace('model.', 'model.encoder.') for layer in layers]
 
-    distances = Distances(model, args.model_name, layers, args.device, args.image_size)
+    distances = Distances(model, args.model, layers, args.device, args.input_size)
 
     with torch.no_grad():
         distances.compare(train_loader)
 
-        distances.plot_cka(os.path.join(args.results_dir, 'cka_train.png'))
         results_train = distances.export()
+        distances.plot_cka(os.path.join(args.output_dir, 'cka_train.png'))
+        distances.plot_norms(os.path.join(args.output_dir, 'norms_train.png'))
 
         cka_first_train, cka_last_train, cka_avg_train = calc_cka(results_train)
+        cka_pooled_first_train, cka_pooled_last_train, cka_pooled_avg_train = calc_cka(results_train, pooled=True)
 
         (dist_first_train, dist_first_norm_train, dist_last_train, dist_last_norm_train, 
          dist_avg_train, dist_avg_norm_train) = calc_distances(results_train)
@@ -401,10 +434,12 @@ def compute_cka_dataset(args):
 
         distances.compare(test_loader)
 
-        distances.plot_cka(os.path.join(args.results_dir, 'cka_test.png'))
         results_test = distances.export()
+        distances.plot_cka(os.path.join(args.output_dir, 'cka_test.png'))
+        distances.plot_norms(os.path.join(args.output_dir, 'norms_test.png'))
 
         cka_first_test, cka_last_test, cka_avg_test = calc_cka(results_test)
+        cka_pooled_first_test, cka_pooled_last_test, cka_pooled_avg_test = calc_cka(results_test, pooled=True)
 
         (dist_first_test, dist_first_norm_test, dist_last_test, dist_last_norm_test
          , dist_avg_test, dist_avg_norm_test) = calc_distances(results_test)
@@ -412,7 +447,7 @@ def compute_cka_dataset(args):
         l2_norm_first_test, l2_norm_last_test, l2_norm_avg_test = calc_l2_norm(results_test)
 
 
-    title = '''dataset_name,model,setting,cka_avg_train,cka_first_train,cka_last_train,dist_avg_train,dist_avg_norm_train,dist_first_train,dist_first_norm_train,dist_last_train,dist_last_norm_train,l2_norm_avg_train,l2_norm_first_train,l2_norm_first_train,cka_avg_test,cka_first_test,cka_last_test,dist_avg_test,dist_avg_norm_test,dist_first_test,dist_first_norm_test,dist_last_test,dist_last_norm_test,l2_norm_avg_test,l2_norm_first_test,l2_norm_last_test\n'''
+    title = '''dataset_name,model,setting,cka_avg_train,cka_first_train,cka_last_train,cka_pooled_avg_train,cka_pooled_first_train,cka_pooled_last_train,dist_avg_train,dist_avg_norm_train,dist_first_train,dist_first_norm_train,dist_last_train,dist_last_norm_train,l2_norm_avg_train,l2_norm_first_train,l2_norm_first_train,cka_avg_test,cka_first_test,cka_last_test,cka_pooled_avg_test,cka_pooled_first_test,cka_pooled_last_test,dist_avg_test,dist_avg_norm_test,dist_first_test,dist_first_norm_test,dist_last_test,dist_last_norm_test,l2_norm_avg_test,l2_norm_first_test,l2_norm_last_test\n'''
     if args.selector == 'cal':
         setting = 'cal'
     elif args.freeze_backbone:
@@ -424,12 +459,18 @@ def compute_cka_dataset(args):
     values = f'''{args.dataset_name},{args.model_name},{setting},{cka_avg_train},{cka_first_train},{cka_last_train},{dist_avg_train},{dist_avg_norm_train},{dist_first_train},{dist_first_norm_train},{dist_last_train},{dist_last_norm_train},{l2_norm_avg_train},{l2_norm_first_train},{l2_norm_last_train},{cka_avg_test},{cka_first_test},{cka_last_test},{dist_avg_test},{dist_avg_norm_test},{dist_first_test},{dist_first_norm_test},{dist_last_test},{dist_last_norm_test},{l2_norm_avg_test},{l2_norm_first_test},{l2_norm_last_test}\n'''
     print(title, values)
 
+    values = f'''{args.dataset_name},{args.model},{setting},{cka_avg_train},{cka_first_train},{cka_last_train},{cka_pooled_avg_train},{cka_pooled_first_train},{cka_pooled_last_train},{dist_avg_train},{dist_avg_norm_train},{dist_first_train},{dist_first_norm_train},{dist_last_train},{dist_last_norm_train},{l2_norm_avg_train},{l2_norm_first_train},{l2_norm_last_train},{cka_avg_test},{cka_first_test},{cka_last_test},{cka_pooled_avg_test},{cka_pooled_first_test},{cka_pooled_last_test},{dist_avg_test},{dist_avg_norm_test},{dist_first_test},{dist_first_norm_test},{dist_last_test},{dist_last_norm_test},{l2_norm_avg_test},{l2_norm_first_test},{l2_norm_last_test}\n'''
+    print(title, values)
+
     if not args.debugging:
         log_dic = {
             'setting': setting,
             'cka_avg_train': cka_avg_train,
             'cka_first_train': cka_first_train,
             'cka_last_train': cka_last_train,
+            'cka_pooled_avg_train': cka_pooled_avg_train,
+            'cka_pooled_first_train': cka_pooled_first_train,
+            'cka_pooled_last_train': cka_pooled_last_train,
             'dist_avg_train': dist_avg_train,
             'dist_avg_norm_train': dist_avg_norm_train,
             'dist_first_train': dist_first_train,
@@ -442,6 +483,9 @@ def compute_cka_dataset(args):
             'cka_avg_test': cka_avg_test,
             'cka_first_test': cka_first_test,
             'cka_last_test': cka_last_test,
+            'cka_pooled_avg_test': cka_pooled_avg_test,
+            'cka_pooled_first_test': cka_pooled_first_test,
+            'cka_pooled_last_test': cka_pooled_last_test,
             'dist_avg_test': dist_avg_test,
             'dist_avg_norm_test': dist_avg_norm_test,
             'dist_first_test': dist_first_test,

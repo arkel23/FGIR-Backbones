@@ -62,31 +62,31 @@ def save_samples(images, output, train, curr_iter, saved, args):
 
     if args.selector == 'cal':
         if isinstance(output, tuple) and len(output) == 7:
-            output, _, _, _, _, _, crops = output
+            output, _, _, _, _, _, samples = output
         elif isinstance(output, tuple) and len(output) == 3:
-            output, _, crops = output
+            output, _, samples = output
         elif isinstance(output, tuple) and len(output) == 2:
-            output, crops = output
+            output, samples = output
         else:
-            crops = None
+            samples = None
     else:
-        crops = None
+        samples = None
 
     if args.save_images and train and (curr_iter % args.save_images == 0):
         save_images(images, osp.join(args.results_dir, f'{curr_iter}.png'), img_sz, args.custom_mean_std)
-        if crops is not None:
-            save_images(crops, osp.join(args.results_dir, f'{curr_iter}_crops.png'), img_sz, args.custom_mean_std)
+        if samples is not None:
+            save_images(samples, osp.join(args.results_dir, f'{curr_iter}_samples.png'), img_sz, args.custom_mean_std)
 
     elif args.save_images and not train and not saved:
         save_images(images, osp.join(args.results_dir, f'test.png'), img_sz, args.custom_mean_std)
-        if crops is not None:
-            save_images(crops, osp.join(args.results_dir, f'test_crops.png'), img_sz, args.custom_mean_std)
+        if samples is not None:
+            save_images(samples, osp.join(args.results_dir, f'test_samples.png'), img_sz, args.custom_mean_std)
 
         if not args.debugging and not args.vis_errors and not args.offline:
-            if crops is not None:
-                wandb.log({'crops': wandb.Image(crops)})
+            if samples is not None:
+                wandb.log({'samples': wandb.Image(samples)})
             else:
-                wandb.log({'crops': wandb.Image(images)})
+                wandb.log({'samples': wandb.Image(images)})
 
         return True
     

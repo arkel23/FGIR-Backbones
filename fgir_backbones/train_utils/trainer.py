@@ -5,6 +5,7 @@ from contextlib import suppress
 import wandb
 import torch
 from timm.models import model_parameters
+from einops import rearrange
 
 from .misc_utils import AverageMeter, accuracy, count_params_single, count_params_trainable
 from .calc_acc_voting import accuracy_vote
@@ -97,6 +98,12 @@ class Trainer():
 
         for idx, batch in enumerate(self.train_loader):
             images, targets = self.prepare_batch(batch)
+
+            if self.args.cal_cm:
+                # b r c h w (r=2, 2 diff images with same class, if only 1 in class then 2 augs of the same)
+                images = rearrange(images, 'b r c h w -> (b r) c h w')
+                targets = rearrange(targets, 'b r -> (b r)')
+
             output, loss = self.predict(images, targets, train=True)
 
             acc1, acck = accuracy(output, targets, topk=(1, self.args.top_k))

@@ -24,7 +24,10 @@ def get_set(args, split, transform=None):
                                transform=transform, download=True)
         ds.num_classes = 100
     else:
-        ds = DatasetImgTarget(args, split=split, transform=transform)
+        if args.cal_cm and split == 'train':
+            ds = DatasetImgTargetTwoSameClass(args, split=split, transform=transform)
+        else:
+            ds = DatasetImgTarget(args, split=split, transform=transform)
         args.num_classes = ds.num_classes
 
     setattr(args, f'num_images_{split}', ds.__len__())
@@ -81,3 +84,44 @@ class DatasetImgTarget(data.Dataset):
 
     def __len__(self):
         return len(self.targets)
+
+
+class DatasetImgTargetTwoSameClass(DatasetImgTarget):
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        img_dir, target = self.data[idx], self.targets[idx]
+        full_img_dir = os.path.join(self.root, self.images_folder, img_dir)
+        img = Image.open(full_img_dir)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Find indices of images with the same class as the current image
+        same_class_indices = np.where(self.targets == target)[0]
+        # Remove the current index from the list
+        same_class_indices = same_class_indices[same_class_indices != idx]
+
+        # Randomly select one index from the list of indices with the same class
+        if len(same_class_indices) > 0:
+            same_class_idx = np.random.choice(same_class_indices)
+        # If there are no other images with the same class, return the current image twice
+        else:
+            same_class_idx = idx
+
+        # load same class image
+        same_class_img_dir = self.data[same_class_idx]
+        full_same_class_img_dir = os.path.join(self.root, self.images_folder, same_class_img_dir)
+        same_class_img = Image.open(full_same_class_img_dir)
+        if same_class_img.mode != 'RGB':
+            same_class_img = same_class_img.convert('RGB')
+
+        target = np.repeat(target, 2)
+
+        if self.transform:
+            img = self.transform(img)
+            same_class_img = self.transform(same_class_img)
+            imgs = torch.stack([img, same_class_img], dim=0)
+            return imgs, target
+
+        return img, same_class_img, target
