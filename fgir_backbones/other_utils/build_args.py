@@ -195,13 +195,16 @@ def add_model_args(parser):
     parser.add_argument('--class_proj_size', type=int, default=256,
                         help='dim reduction before classifier in mpncov')
     parser.add_argument('--selector', type=str, default=None, choices=[None, 'cal'])
+    parser.add_argument('--cal_single_crop', action='store_true')
+    parser.add_argument('--cal_topk_crop', type=int, default=0)
     parser.add_argument('--cal_da_pool', action='store_true')
     parser.add_argument('--cal_ap_only', action='store_true',
                         help='if true only uses cal for attention pooling (no crops)')
-    parser.add_argument('--cal_topk_crop', type=int, default=0)
     parser.add_argument('--cal_voting', type=int, default=None,
                         help='voting scheme for accuracy: how many top-k voters from each pred')
     parser.add_argument('--cal_cm', action='store_true')
+    parser.add_argument('--cal_cm_theta_mean', type=float, default=0.5)
+    parser.add_argument('--cal_cm_theta_std', type=float, default=0.1)
     # frozen backbone
     parser.add_argument('--freeze_backbone', action='store_true')
     parser.add_argument('--unfreeze_first_conv', action='store_true',
@@ -324,7 +327,7 @@ def parse_train_args(ret_parser=False):
     parser = add_optim_scheduler_args(parser)
     parser = add_augmentation_args(parser)
     parser = add_model_args(parser)
-    parser.add_argument("--cfg", type=str, default='configs/soylocal_ft_weakaugs.yaml',
+    parser.add_argument("--cfg", type=str, default=None,
                         help="If using it overwrites args and reads yaml file in given path")
     parser.add_argument("--cfg_method", type=str, default=None,
                         help="If using it overwrites args and reads yaml file in given path")

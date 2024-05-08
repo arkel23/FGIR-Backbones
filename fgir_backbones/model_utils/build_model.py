@@ -164,8 +164,9 @@ class ClassifierModel(nn.Module):
 
         if args.selector == 'cal':
             self.model = CAL(model, s, d, args.num_classes, bsd, args.device,
-                             args.cal_topk_crop, args.cal_da_pool,
-                             args.cal_ap_only, args.cal_voting, args.cal_cm)
+                             args.cal_single_crop, args.cal_topk_crop, args.cal_da_pool,
+                             args.cal_ap_only, args.cal_voting, args.cal_cm,
+                             args.cal_cm_theta_mean, args.cal_cm_theta_std)
         else:
             self.model = get_backbone(args)
             self.head = Head(args.classifier, d, args.num_classes, bsd, args.class_proj_size)

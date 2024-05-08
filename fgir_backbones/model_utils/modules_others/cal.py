@@ -30,69 +30,6 @@ def get_cal_config():
     config.single_crop = False
     return config
 
-'''
-# augment function
-def batch_augment(images, attention_map, mode='crop', theta=0.5, padding_ratio=0.1, percent_max=True):
-    batches, _, imgH, imgW = images.size()
-
-    if mode == 'crop':
-        crop_images = []
-        for batch_index in range(batches):
-            atten_map = attention_map[batch_index:batch_index + 1]
-            if isinstance(theta, tuple):
-                if percent_max:
-                    theta_c = random.uniform(*theta) * atten_map.max()
-                else:
-                    theta_c = random.uniform(*theta) * atten_map.mean()
-            else:
-                if percent_max:
-                    theta_c = theta * atten_map.max()
-                else:
-                    theta_c = theta * atten_map.mean()
-
-            # 0 / 1 mask based on if attention at x,y is higher than max value * threshold percentage
-            crop_mask = F.upsample_bilinear(atten_map, size=(imgH, imgW)) >= theta_c
-
-            # x, y indices for 1 values in mask
-            nonzero_indices = torch.nonzero(crop_mask[0, 0, ...])
-
-            # select highest/min height/width
-            height_min = max(int(nonzero_indices[:, 0].min().item() - padding_ratio * imgH), 0)
-            height_max = min(int(nonzero_indices[:, 0].max().item() + padding_ratio * imgH), imgH)
-            width_min = max(int(nonzero_indices[:, 1].min().item() - padding_ratio * imgW), 0)
-            width_max = min(int(nonzero_indices[:, 1].max().item() + padding_ratio * imgW), imgW)
-
-            crop_images.append(
-                F.upsample_bilinear(
-                    images[batch_index:batch_index + 1, :, height_min:height_max, width_min:width_max],
-                    size=(imgH, imgW)))
-        crop_images = torch.cat(crop_images, dim=0)
-        return crop_images
-
-    elif mode == 'drop':
-        drop_masks = []
-        for batch_index in range(batches):
-            atten_map = attention_map[batch_index:batch_index + 1]
-            if isinstance(theta, tuple):
-                if percent_max:
-                    theta_d = random.uniform(*theta) * atten_map.max()
-                else:
-                    theta_c = random.uniform(*theta) * atten_map.mean()
-            else:
-                if percent_max:
-                    theta_c = theta * atten_map.max()
-                else:
-                    theta_c = theta * atten_map.mean()
-
-            drop_masks.append(F.upsample_bilinear(atten_map, size=(imgH, imgW)) < theta_d)
-        drop_masks = torch.cat(drop_masks, dim=0)
-        drop_images = images * drop_masks.float()
-        return drop_images
-
-    else:
-        raise ValueError('Expected mode in [\'crop\', \'drop\'], \
-            but received unsupported augmentation method %s' % mode)
-'''
 
 def get_theta(atten_map, theta=0.5, percent_max=True, top_k=None):
     if top_k:
@@ -111,7 +48,6 @@ def get_theta(atten_map, theta=0.5, percent_max=True, top_k=None):
             theta_c = theta * atten_map.mean()
 
     return theta_c
-
 
 
 def get_width_height(atten_map, imgH=224, imgW=224, theta_c=0.5, padding_ratio=0.1):
@@ -347,16 +283,20 @@ class WSDAN_CAL(nn.Module):
 
 class CAL(nn.Module):
     def __init__(self, model, seq_len=196, hidden_size=768, num_classes=1000,
-                 bsd=False, device='cpu', topk_crop=0, da_pool=0, ap_only=False, voting=0, cm=False):
+                 bsd=False, device='cpu', single_crop=False, topk_crop=0,
+                 da_pool=0, ap_only=False, voting=0,
+                 cm=False, cm_theta_mean=0.5, cm_theta_std=0.1):
         super(CAL, self).__init__()
 
         config = get_cal_config()
         self.beta = config.beta
-        self.single_crop = config.single_crop
+        self.single_crop = single_crop
         self.topk_crop = topk_crop
         self.ap_only = ap_only
         self.voting = voting
         self.cm = cm
+        self.cm_theta_low = cm_theta_mean - cm_theta_std
+        self.cm_theta_high = cm_theta_mean + cm_theta_std
 
         # Network Initialization
         if bsd:
@@ -398,7 +338,8 @@ class CAL(nn.Module):
                 drop_images = batch_augment(
                     x, attention_map[:, 1:2, :, :], mode='drop', theta=(0.2, 0.5))
                 cm_images = batch_augment(
-                    x, attention_map[:, 2:, :, :], mode='cm', theta=(0.4, 0.6), padding_ratio=0)
+                    x, attention_map[:, 2:, :, :], mode='cm', padding_ratio=0,
+                    theta=(self.cm_theta_low, self.cm_theta_high))
 
             aug_images = torch.cat([crop_images, cm_images, drop_images], dim=0)
 
@@ -415,6 +356,7 @@ class CAL(nn.Module):
 
             return (y_pred, y_pred_raw, y_pred_aux, feature_matrix, feature_center_batch,
                     y_pred_aug, aug_images)
+
 
         elif self.training and y is not None:
             # raw image
@@ -460,66 +402,19 @@ class CAL(nn.Module):
             if hasattr(self, 'da_pool'):
                 attention_map = self.da_pool(attention_map)
 
-            crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.1, padding_ratio=0.05)
-            feature_maps = self.encoder(crop_images3)
+            crop_images = batch_augment(x, attention_map, mode='crop',
+                                         theta=0.1, top_k=self.topk_crop, padding_ratio=0.05)
+            feature_maps = self.encoder(crop_images)
             y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
 
             # final prediction
             y_pred = (y_pred_raw + y_pred_crop3) / 2.
 
-            return y_pred, crop_images3
-
-
-        elif self.topk_crop:
-            k = self.topk_crop
-            x_m = torch.flip(x, [3])
-
-            # Raw Image
-            feature_maps = self.encoder(x)
-            y_pred_raw, _, _, attention_map = self.dfsm(feature_maps)
-            if hasattr(self, 'da_pool'):
-                attention_map = self.da_pool(attention_map)
-
-            feature_maps = self.encoder(x_m)
-            y_pred_raw_m, _, _, attention_map_m = self.dfsm(feature_maps)
-            if hasattr(self, 'da_pool'):
-                attention_map_m = self.da_pool(attention_map_m)
-
-            # Object Localization and Refinement
-            crop_images = batch_augment(x, attention_map, mode='crop', top_k=k, padding_ratio=0.1)
-            feature_maps = self.encoder(crop_images)
-            y_pred_crop, _, _, _ = self.dfsm(feature_maps)
-
-            crop_images2 = batch_augment(x, attention_map, mode='crop', top_k=k+2, padding_ratio=0.1)
-            feature_maps = self.encoder(crop_images2)
-            y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
-
-            crop_images3 = batch_augment(x, attention_map, mode='crop', top_k=k+4, padding_ratio=0.05)
-            feature_maps = self.encoder(crop_images3)
-            y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
-
-            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+1, padding_ratio=0.1)
-            feature_maps = self.encoder(crop_images_m)
-            y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
-
-            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+3, padding_ratio=0.1)
-            feature_maps = self.encoder(crop_images_m2)
-            y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
-
-            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+5, padding_ratio=0.05)
-            feature_maps = self.encoder(crop_images_m3)
-            y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
-
-            y_pred = (y_pred_raw + y_pred_crop + y_pred_crop2 + y_pred_crop3) / 4.
-            y_pred_m = (y_pred_raw_m + y_pred_crop_m + y_pred_crop_m2 + y_pred_crop_m3) / 4.
-            y_pred = (y_pred + y_pred_m) / 2.
-
-            samples = torch.cat([x, crop_images, crop_images2, crop_images3,
-                               crop_images_m, crop_images_m2, crop_images_m3], dim=0)
+            samples = torch.cat([x, crop_images], dim=0)
             return y_pred, samples
 
 
-        elif self.voting:
+        elif self.voting and self.topk_crop:
             k = self.topk_crop
             x_m = torch.flip(x, [3])
 
@@ -569,6 +464,106 @@ class CAL(nn.Module):
             samples = torch.cat([x, crop_images, crop_images2, crop_images3,
                                crop_images_m, crop_images_m2, crop_images_m3], dim=0)
             return y_pred, y_voting, samples
+
+
+        elif self.voting:
+            x_m = torch.flip(x, [3])
+
+            # Raw Image
+            feature_maps = self.encoder(x)
+            y_pred_raw, _, _, attention_map = self.dfsm(feature_maps)
+            if hasattr(self, 'da_pool'):
+                attention_map = self.da_pool(attention_map)
+
+            feature_maps = self.encoder(x_m)
+            y_pred_raw_m, _, _, attention_map_m = self.dfsm(feature_maps)
+            if hasattr(self, 'da_pool'):
+                attention_map_m = self.da_pool(attention_map_m)
+
+            # Object Localization and Refinement
+            crop_images = batch_augment(x, attention_map, mode='crop', theta=0.3, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images)
+            y_pred_crop, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images2 = batch_augment(x, attention_map, mode='crop', theta=0.2, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images2)
+            y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images3 = batch_augment(x, attention_map, mode='crop', theta=0.1, padding_ratio=0.05)
+            feature_maps = self.encoder(crop_images3)
+            y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', theta=0.3, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images_m)
+            y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.2, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images_m2)
+            y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', theta=0.1, padding_ratio=0.05)
+            feature_maps = self.encoder(crop_images_m3)
+            y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
+
+            y_pred = (y_pred_raw + y_pred_crop + y_pred_crop2 + y_pred_crop3) / 4.
+            y_pred_m = (y_pred_raw_m + y_pred_crop_m + y_pred_crop_m2 + y_pred_crop_m3) / 4.
+            y_pred = (y_pred + y_pred_m) / 2.
+
+            y_voting = torch.stack([y_pred_raw, y_pred_crop, y_pred_crop2, y_pred_crop3,
+                                    y_pred_raw_m, y_pred_crop_m, y_pred_crop_m2, y_pred_crop_m3], dim=1)
+
+            samples = torch.cat([x, crop_images, crop_images2, crop_images3,
+                               crop_images_m, crop_images_m2, crop_images_m3], dim=0)
+            return y_pred, y_voting, samples
+
+
+        elif self.topk_crop:
+            k = self.topk_crop
+            x_m = torch.flip(x, [3])
+
+            # Raw Image
+            feature_maps = self.encoder(x)
+            y_pred_raw, _, _, attention_map = self.dfsm(feature_maps)
+            if hasattr(self, 'da_pool'):
+                attention_map = self.da_pool(attention_map)
+
+            feature_maps = self.encoder(x_m)
+            y_pred_raw_m, _, _, attention_map_m = self.dfsm(feature_maps)
+            if hasattr(self, 'da_pool'):
+                attention_map_m = self.da_pool(attention_map_m)
+
+            # Object Localization and Refinement
+            crop_images = batch_augment(x, attention_map, mode='crop', top_k=k, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images)
+            y_pred_crop, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images2 = batch_augment(x, attention_map, mode='crop', top_k=k+2, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images2)
+            y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images3 = batch_augment(x, attention_map, mode='crop', top_k=k+4, padding_ratio=0.05)
+            feature_maps = self.encoder(crop_images3)
+            y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+1, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images_m)
+            y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+3, padding_ratio=0.1)
+            feature_maps = self.encoder(crop_images_m2)
+            y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
+
+            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+5, padding_ratio=0.05)
+            feature_maps = self.encoder(crop_images_m3)
+            y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
+
+            y_pred = (y_pred_raw + y_pred_crop + y_pred_crop2 + y_pred_crop3) / 4.
+            y_pred_m = (y_pred_raw_m + y_pred_crop_m + y_pred_crop_m2 + y_pred_crop_m3) / 4.
+            y_pred = (y_pred + y_pred_m) / 2.
+
+            samples = torch.cat([x, crop_images, crop_images2, crop_images3,
+                               crop_images_m, crop_images_m2, crop_images_m3], dim=0)
+            return y_pred, samples
 
 
         else:
