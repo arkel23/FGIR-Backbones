@@ -1,4 +1,5 @@
 wandb
+ml-collections
 #timm==0.6.13
 #pip install --no-dependencies --force-reinstall -v "timm==0.6.13"
 einops

@@ -5,7 +5,7 @@ import timm
 import torch
 import torch.nn as nn
 
-from .modules_others import beit_dict, van_dict, ViT, ViTConfig, PatchPromptTuning, Head, CAL
+from .modules_others import beit_dict, van_dict, ViT, ViTConfig, Head, CAL
 
 
 VITS = [

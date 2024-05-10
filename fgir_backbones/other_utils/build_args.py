@@ -203,7 +203,7 @@ def add_model_args(parser):
     parser.add_argument('--cal_voting', type=int, default=None,
                         help='voting scheme for accuracy: how many top-k voters from each pred')
     parser.add_argument('--cal_cm', action='store_true')
-    parser.add_argument('--cal_cm_theta_mean', type=float, default=0.5)
+    parser.add_argument('--cal_cm_theta_mean', type=float, default=0.7)
     parser.add_argument('--cal_cm_theta_std', type=float, default=0.1)
     # frozen backbone
     parser.add_argument('--freeze_backbone', action='store_true')
