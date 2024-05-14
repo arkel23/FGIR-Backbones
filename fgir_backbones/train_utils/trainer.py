@@ -18,14 +18,13 @@ from .per_class_acc import calc_per_class_acc, calc_class_deviation
 
 class Trainer():
     def __init__(self, args, model, criterion, optimizer, lr_scheduler,
-                 train_loader, val_loader, test_loader):
+                 train_loader, val_loader):
         self.args = args
         self.criterion = criterion
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.test_loader = test_loader
         self.model = model
         self.saved = False
         self.curr_iter = 0
@@ -281,14 +280,14 @@ class Trainer():
     def test(self):
         print(f'Evaluation on test dataloader: ')
         self.epoch = self.args.epochs
-        test_acc, _ = self.validate_epoch(self.test_loader)
+        test_acc, _ = self.validate_epoch(self.val_loader)
         self.computation_stats()
 
         if self.args.test_multiple:
             self.epoch = 0
             for i in range(self.args.test_multiple):
                 print(f'Testing multiple times: {i}/{self.args.test_multiple}')
-                test_acc, _ = self.validate_epoch(self.test_loader)
+                test_acc, _ = self.validate_epoch(self.val_loader)
 
         if self.args.debugging:
             return None, None, None, None, None

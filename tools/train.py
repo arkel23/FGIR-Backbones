@@ -58,7 +58,7 @@ def build_environment(args):
     set_random_seed(args.seed, numpy=False)
 
     # dataloaders
-    train_loader, val_loader, test_loader = build_dataloaders(args)
+    train_loader, val_loader, _ = build_dataloaders(args)
 
     # model and criterion
     model = build_model(args)
@@ -81,7 +81,7 @@ def build_environment(args):
         adjust_args_general(args)
     os.makedirs(args.results_dir, exist_ok=True)
 
-    return model, criterion, optimizer, lr_scheduler, train_loader, val_loader, test_loader
+    return model, criterion, optimizer, lr_scheduler, train_loader, val_loader
 
 
 def main():
@@ -89,10 +89,10 @@ def main():
 
     args = parse_train_args()
 
-    model, criterion, optimizer, lr_scheduler, train_loader, val_loader, test_loader = build_environment(args)
+    model, criterion, optimizer, lr_scheduler, train_loader, val_loader = build_environment(args)
 
     trainer = Trainer(args, model, criterion, optimizer, lr_scheduler,
-                      train_loader, val_loader, test_loader)
+                      train_loader, val_loader)
 
     if args.test_only:
         if not args.vis_errors and not args.debugging and not args.offline:
