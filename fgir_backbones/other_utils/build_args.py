@@ -27,7 +27,8 @@ def add_adjust_common_dependent(args):
     args.effective_batch_size = args.batch_size * args.gradient_accumulation_steps
 
     if args.base_lr:
-        args.lr = args.base_lr * (args.effective_batch_size / 8)
+        base_bs = 4 if args.cal_cm else 8
+        args.lr = args.base_lr * (args.effective_batch_size / base_bs)
 
     # distributed
     args.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
