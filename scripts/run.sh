@@ -3,24 +3,24 @@
 run='False'
 run_lr='False'
 run_seed='False'
+cal_ap='False'
 augs='weakaugs'
 ls=''
 sd=''
 freeze_backbone=''
 two_seeds=''
 
-device=0
 serial=1
 seed=1
 lr=0.003
 
 dataset_name='cub'
-model_name='vit_b16 --classifier cls --cfg_method configs/methods/glsim.yaml'
+model_name='vit_b16'
 
 lr_array=('0.03' '0.01' '0.003' '0.001')
 seed_array=('1' '10' '100')
 
-VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,med_augs,ls,sd,freeze_backbone,two_seeds,device:,serial:,seed:,lr:,dataset_name:,model_name: -- "$@")
+VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,cal_ap,med_augs,ls,sd,freeze_backbone,two_seeds,serial:,seed:,lr:,dataset_name:,model_name: -- "$@")
 if [[ $? -ne 0 ]]; then
     exit 1;
 fi
@@ -38,6 +38,10 @@ while [ : ]; do
         ;;
     --run_seed)
         run_seed='True'
+        shift 1
+        ;;
+    --cal_ap)
+        cal_ap='True'
         shift 1
         ;;
     --med_augs)
@@ -60,10 +64,6 @@ while [ : ]; do
     --two_seeds)
         seed_array=('1' '10')
         shift 1
-        ;;
-    --device)
-        device=${2}
-        shift 2
         ;;
     --serial)
         serial=${2}
@@ -91,7 +91,6 @@ while [ : ]; do
   esac
 done
 
-# CMD="CUDA_VISIBLE_DEVICES=${device} nohup python -u tools/train.py --serial ${serial} --cfg configs/${dataset_name}_ft_medaugs.yaml"
 CMD="nohup python -u tools/train.py --serial ${serial} --cfg configs/${dataset_name}_ft_${augs}.yaml${ls}${sd}${freeze_backbone}"
 echo "${CMD}"
 
@@ -106,6 +105,12 @@ if [[ "$run_lr" == "True" ]]; then
     for rate in ${lr_array[@]}; do
         echo "${CMD} --seed ${seed} --lr ${rate} --model_name ${model_name} --train_trainval"
         ${CMD} --seed ${seed} --lr ${rate} --model_name ${model_name} --train_trainval
+
+        if [[ "$cal_ap" == "True" ]]; then
+            echo "${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth"
+            ${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth
+        fi
+
     done
 fi
 
@@ -115,5 +120,11 @@ if [[ "$run_seed" == "True" ]]; then
     for seed in ${seed_array[@]}; do
         echo "${CMD} --seed ${seed} --lr ${lr} --model_name ${model_name}"
         ${CMD} --seed ${seed} --lr ${lr} --model_name ${model_name}
+
+        if [[ "$cal_ap" == "True" ]]; then
+            echo "${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth"
+            ${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth
+        fi
+
     done
 fi

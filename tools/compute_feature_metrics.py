@@ -23,6 +23,9 @@ from mpl_toolkits import axes_grid1
 from einops import reduce, rearrange
 
 
+EPS = 1e-5
+
+
 def adjust_args_general(args):
     freeze = '_fz' if args.freeze_backbone else ''
     selector = f'_{args.selector}' if args.selector else ''
@@ -157,7 +160,8 @@ class Distances:
         result = torch.trace(K @ L)
         result += ((ones.t() @ K @ ones @ ones.t() @ L @ ones) / ((N - 1) * (N - 2))).item()
         result -= ((ones.t() @ K @ L @ ones) * 2 / (N - 2)).item()
-        return (1 / (N * (N - 3)) * result).item()
+        result = ((1 / (N * (N - 3))) * result).item()
+        return result
 
     def _pool_features(self, feat, pool=True):
         if hasattr(self, 'pool') and pool:
@@ -229,7 +233,10 @@ class Distances:
 
                 K = X @ X.t()
                 K.fill_diagonal_(0.0)
-                self.hsic_matrix[i, :, 0] += self._HSIC(K, K) / num_batches
+                try:
+                    self.hsic_matrix[i, :, 0] += self._HSIC(K, K) / num_batches
+                except:
+                    self.hsic_matrix[i, :, 0] += 0
 
                 K_pooled = X_pooled @ X_pooled.t()
                 K_pooled.fill_diagonal_(0.0)
@@ -248,8 +255,12 @@ class Distances:
                     assert K.shape == L.shape, f"Feature shape mistach! {K.shape}, {L.shape}"
                     assert K_pooled.shape == L_pooled.shape, f"Feature shape mistach! {K_pooled.shape}, {L_pooled.shape}"
 
-                    self.hsic_matrix[i, j, 1] += self._HSIC(K, L) / num_batches
-                    self.hsic_matrix[i, j, 2] += self._HSIC(L, L) / num_batches
+                    try:
+                        self.hsic_matrix[i, j, 1] += self._HSIC(K, L) / num_batches
+                        self.hsic_matrix[i, j, 2] += self._HSIC(L, L) / num_batches
+                    except:
+                        self.hsic_matrix[i, j, 1] += 0
+                        self.hsic_matrix[i, j, 2] += 0
 
                     self.hsic_matrix_pooled[i, j, 1] += self._HSIC(K_pooled, L_pooled) / num_batches
                     self.hsic_matrix_pooled[i, j, 2] += self._HSIC(L_pooled, L_pooled) / num_batches
@@ -381,8 +392,8 @@ def compute_cka_dataset(args):
 
     model = build_model(args)
 
-    results_fp = os.path.join(args.results_dir, 'cka_sim.csv')
     args = adjust_args_general(args)
+    results_fp = os.path.join(args.results_dir, 'feature_metrics.csv')
 
     if not args.debugging:
         wandb.init(config=args, project=args.project_name, entity=args.entity)
@@ -468,6 +479,10 @@ def compute_cka_dataset(args):
 
     values = f'''{args.dataset_name},{args.model_name},{setting},{cka_avg_train},{cka_first_train},{cka_last_train},{cka_pooled_avg_train},{cka_pooled_first_train},{cka_pooled_last_train},{dist_avg_train},{dist_avg_norm_train},{dist_first_train},{dist_first_norm_train},{dist_last_train},{dist_last_norm_train},{l2_norm_avg_train},{l2_norm_first_train},{l2_norm_last_train},{cka_avg_test},{cka_first_test},{cka_last_test},{cka_pooled_avg_test},{cka_pooled_first_test},{cka_pooled_last_test},{dist_avg_test},{dist_avg_norm_test},{dist_first_test},{dist_first_norm_test},{dist_last_test},{dist_last_norm_test},{l2_norm_avg_test},{l2_norm_first_test},{l2_norm_last_test}\n'''
     print(title, values)
+
+    with open(results_fp, 'w') as file:
+        file.write(title)
+        file.write(values)
 
     if not args.debugging:
         log_dic = {
