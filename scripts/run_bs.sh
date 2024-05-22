@@ -16,12 +16,13 @@ lr=0.003
 
 dataset_name='cub'
 model_name='vit_b16'
+cal_topk_crop=''
 others=''
 
 lr_array=('0.03' '0.01' '0.003' '0.001')
 seed_array=('1' '10')
 
-VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,cal_ap,med_augs,ls,sd,freeze_backbone,batch_size:,serial:,seed:,lr:,dataset_name:,model_name:,others: -- "$@")
+VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,cal_ap,med_augs,ls,sd,freeze_backbone,batch_size:,serial:,seed:,lr:,dataset_name:,model_name:,cal_topk_crop:,others: -- "$@")
 if [[ $? -ne 0 ]]; then
     exit 1;
 fi
@@ -86,6 +87,10 @@ while [ : ]; do
         model_name=${2}
         shift 2
         ;;
+    --cal_topk_crop)
+        cal_topk_crop=${2}
+        shift 2
+        ;;
     --others)
         others=${2}
         shift 2
@@ -118,6 +123,11 @@ if [[ "$run_lr" == "True" ]]; then
             ${CMD_AP}
         fi
 
+        if [[ "$cal_topk_crop" =~ ^[0-9]+$ ]]; then
+            echo "${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}"
+            ${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}
+        fi
+
     done
 fi
 
@@ -131,6 +141,11 @@ if [[ "$run_seed" == "True" ]]; then
         if [[ "$cal_ap" == "True" ]]; then
             echo "${CMD_AP}"
             ${CMD_AP}
+        fi
+
+        if [[ "$cal_topk_crop" =~ ^[0-9]+$ ]]; then
+            echo "${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}"
+            ${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}
         fi
 
     done

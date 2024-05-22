@@ -3,7 +3,7 @@
 run='False'
 run_lr='False'
 run_seed='False'
-cal_ap='False'
+cal_ap_only='False'
 augs='weakaugs'
 ls=''
 sd=''
@@ -16,12 +16,13 @@ lr=0.003
 
 dataset_name='cub'
 model_name='vit_b16'
+cal_topk_crop=''
 others=''
 
 lr_array=('0.03' '0.01' '0.003' '0.001')
 seed_array=('1' '10' '100')
 
-VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,cal_ap,med_augs,ls,sd,freeze_backbone,two_seeds,serial:,seed:,lr:,dataset_name:,model_name:,others: -- "$@")
+VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,cal_ap_only,med_augs,ls,sd,freeze_backbone,two_seeds,serial:,seed:,lr:,dataset_name:,model_name:,cal_topk_crop:,others: -- "$@")
 if [[ $? -ne 0 ]]; then
     exit 1;
 fi
@@ -41,8 +42,8 @@ while [ : ]; do
         run_seed='True'
         shift 1
         ;;
-    --cal_ap)
-        cal_ap='True'
+    --cal_ap_only)
+        cal_ap_only='True'
         shift 1
         ;;
     --med_augs)
@@ -86,6 +87,10 @@ while [ : ]; do
         model_name=${2}
         shift 2
         ;;
+    --cal_topk_crop)
+        cal_topk_crop=${2}
+        shift 2
+        ;;
     --others)
         others=${2}
         shift 2
@@ -97,9 +102,9 @@ while [ : ]; do
 done
 
 CMD="nohup python -u tools/train.py --serial ${serial} --cfg configs/${dataset_name}_ft_${augs}.yaml${ls}${sd}${freeze_backbone} --model_name ${model_name}${others}"
-CMD_AP="nohup python -u tools/train.py --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth"
+CMD_TEST="nohup python -u tools/train.py --seed ${seed} --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth"
 echo "${CMD}"
-echo "${CMD_AP}"
+echo "${CMD_TEST}"
 
 # single run
 if [[ "$run" == "True" ]]; then
@@ -113,9 +118,14 @@ if [[ "$run_lr" == "True" ]]; then
         echo "${CMD} --seed ${seed} --lr ${rate} --train_trainval"
         ${CMD} --seed ${seed} --lr ${rate} --train_trainval
 
-        if [[ "$cal_ap" == "True" ]]; then
-            echo "${CMD_AP}"
-            ${CMD_AP}
+        if [[ "$cal_ap_only" == "True" ]]; then
+            echo "${CMD_TEST} --cal_ap_only "
+            ${CMD_TEST} --cal_ap_only
+        fi
+
+        if [[ "$cal_topk_crop" =~ ^[0-9]+$ ]]; then
+            echo "${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}"
+            ${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}
         fi
 
     done
@@ -128,9 +138,9 @@ if [[ "$run_seed" == "True" ]]; then
         echo "${CMD} --seed ${seed} --lr ${lr}"
         ${CMD} --seed ${seed} --lr ${lr}
 
-        if [[ "$cal_ap" == "True" ]]; then
-            echo "${CMD_AP}"
-            ${CMD_AP}
+        if [[ "$cal_topk_crop" =~ ^[0-9]+$ ]]; then
+            echo "${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}"
+            ${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}
         fi
 
     done
