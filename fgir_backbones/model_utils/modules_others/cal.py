@@ -415,8 +415,8 @@ class CAL(nn.Module):
 
 
         elif self.voting and self.topk_crop:
-            k = self.topk_crop
-            x_m = torch.flip(x, [3])
+            # k = self.topk_crop
+            k = np.linspace(self.topk_crop, self.topk_crop * 2, 6).round(0).astype('int')
 
             # Raw Image
             feature_maps = self.encoder(x)
@@ -430,27 +430,27 @@ class CAL(nn.Module):
                 attention_map_m = self.da_pool(attention_map_m)
 
             # Object Localization and Refinement
-            crop_images = batch_augment(x, attention_map, mode='crop', top_k=k, padding_ratio=0.1)
+            crop_images = batch_augment(x, attention_map, mode='crop', top_k=k[0], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images)
             y_pred_crop, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images2 = batch_augment(x, attention_map, mode='crop', top_k=k+2, padding_ratio=0.1)
+            crop_images2 = batch_augment(x, attention_map, mode='crop', top_k=k[2], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images2)
             y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images3 = batch_augment(x, attention_map, mode='crop', top_k=k+4, padding_ratio=0.05)
+            crop_images3 = batch_augment(x, attention_map, mode='crop', top_k=k[4], padding_ratio=0.05)
             feature_maps = self.encoder(crop_images3)
             y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+1, padding_ratio=0.1)
+            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', top_k=k[1], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m)
             y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+3, padding_ratio=0.1)
+            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k[3], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m2)
             y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+5, padding_ratio=0.05)
+            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k[5], padding_ratio=0.05)
             feature_maps = self.encoder(crop_images_m3)
             y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
 
@@ -518,7 +518,8 @@ class CAL(nn.Module):
 
 
         elif self.topk_crop:
-            k = self.topk_crop
+            # k = self.topk_crop
+            k = np.linspace(self.topk_crop, self.topk_crop * 2, 6).round(0).astype('int')
             x_m = torch.flip(x, [3])
 
             # Raw Image
@@ -533,27 +534,27 @@ class CAL(nn.Module):
                 attention_map_m = self.da_pool(attention_map_m)
 
             # Object Localization and Refinement
-            crop_images = batch_augment(x, attention_map, mode='crop', top_k=k, padding_ratio=0.1)
+            crop_images = batch_augment(x, attention_map, mode='crop', top_k=k[0], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images)
             y_pred_crop, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images2 = batch_augment(x, attention_map, mode='crop', top_k=k+2, padding_ratio=0.1)
+            crop_images2 = batch_augment(x, attention_map, mode='crop', top_k=k[2], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images2)
             y_pred_crop2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images3 = batch_augment(x, attention_map, mode='crop', top_k=k+4, padding_ratio=0.05)
+            crop_images3 = batch_augment(x, attention_map, mode='crop', top_k=k[4], padding_ratio=0.05)
             feature_maps = self.encoder(crop_images3)
             y_pred_crop3, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+1, padding_ratio=0.1)
+            crop_images_m = batch_augment(x_m, attention_map_m, mode='crop', top_k=k[1], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m)
             y_pred_crop_m, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+3, padding_ratio=0.1)
+            crop_images_m2 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k[3], padding_ratio=0.1)
             feature_maps = self.encoder(crop_images_m2)
             y_pred_crop_m2, _, _, _ = self.dfsm(feature_maps)
 
-            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k+5, padding_ratio=0.05)
+            crop_images_m3 = batch_augment(x_m, attention_map_m, mode='crop', top_k=k[5], padding_ratio=0.05)
             feature_maps = self.encoder(crop_images_m3)
             y_pred_crop_m3, _, _, _ = self.dfsm(feature_maps)
 

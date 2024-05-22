@@ -16,11 +16,12 @@ lr=0.003
 
 dataset_name='cub'
 model_name='vit_b16'
+others=''
 
 lr_array=('0.03' '0.01' '0.003' '0.001')
 seed_array=('1' '10' '100')
 
-VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,cal_ap,med_augs,ls,sd,freeze_backbone,two_seeds,serial:,seed:,lr:,dataset_name:,model_name: -- "$@")
+VALID_ARGS=$(getopt  -o '' --long run,run_lr,run_seed,cal_ap,med_augs,ls,sd,freeze_backbone,two_seeds,serial:,seed:,lr:,dataset_name:,model_name:,others: -- "$@")
 if [[ $? -ne 0 ]]; then
     exit 1;
 fi
@@ -85,30 +86,36 @@ while [ : ]; do
         model_name=${2}
         shift 2
         ;;
+    --others)
+        others=${2}
+        shift 2
+        ;;
     --) shift;
         break
         ;;
   esac
 done
 
-CMD="nohup python -u tools/train.py --serial ${serial} --cfg configs/${dataset_name}_ft_${augs}.yaml${ls}${sd}${freeze_backbone}"
+CMD="nohup python -u tools/train.py --serial ${serial} --cfg configs/${dataset_name}_ft_${augs}.yaml${ls}${sd}${freeze_backbone} --model_name ${model_name}${others}"
+CMD_AP="nohup python -u tools/train.py --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth"
 echo "${CMD}"
+echo "${CMD_AP}"
 
 # single run
 if [[ "$run" == "True" ]]; then
-    echo "${CMD} --seed ${seed} --lr ${lr} --model_name ${model_name}"
-    ${CMD} --seed ${seed} --lr ${lr} --model_name ${model_name}
+    echo "${CMD} --seed ${seed} --lr ${lr}"
+    ${CMD} --seed ${seed} --lr ${lr}
 fi
 
 # lr run
 if [[ "$run_lr" == "True" ]]; then
     for rate in ${lr_array[@]}; do
-        echo "${CMD} --seed ${seed} --lr ${rate} --model_name ${model_name} --train_trainval"
-        ${CMD} --seed ${seed} --lr ${rate} --model_name ${model_name} --train_trainval
+        echo "${CMD} --seed ${seed} --lr ${rate} --train_trainval"
+        ${CMD} --seed ${seed} --lr ${rate} --train_trainval
 
         if [[ "$cal_ap" == "True" ]]; then
-            echo "${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth"
-            ${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth
+            echo "${CMD_AP}"
+            ${CMD_AP}
         fi
 
     done
@@ -118,12 +125,12 @@ fi
 # seed run
 if [[ "$run_seed" == "True" ]]; then
     for seed in ${seed_array[@]}; do
-        echo "${CMD} --seed ${seed} --lr ${lr} --model_name ${model_name}"
-        ${CMD} --seed ${seed} --lr ${lr} --model_name ${model_name}
+        echo "${CMD} --seed ${seed} --lr ${lr}"
+        ${CMD} --seed ${seed} --lr ${lr}
 
         if [[ "$cal_ap" == "True" ]]; then
-            echo "${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth"
-            ${CMD} --seed ${seed} --cal_ap_only --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_${serial}/${model_name}_last.pth
+            echo "${CMD_AP}"
+            ${CMD_AP}
         fi
 
     done
