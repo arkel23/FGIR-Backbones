@@ -138,6 +138,11 @@ if [[ "$run_seed" == "True" ]]; then
         echo "${CMD} --seed ${seed} --lr ${lr}"
         ${CMD} --seed ${seed} --lr ${lr}
 
+        if [[ "$cal_ap_only" == "True" ]]; then
+            echo "${CMD_TEST} --cal_ap_only "
+            ${CMD_TEST} --cal_ap_only
+        fi
+
         if [[ "$cal_topk_crop" =~ ^[0-9]+$ ]]; then
             echo "${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}"
             ${CMD_TEST} --cal_topk_crop  ${cal_topk_crop}
