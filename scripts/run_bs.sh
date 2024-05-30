@@ -102,7 +102,7 @@ while [ : ]; do
 done
 
 CMD="nohup python -u tools/train.py --serial ${serial} --batch_size ${batch_size} --cfg configs/${dataset_name}_ft_${augs}.yaml${ls}${sd}${freeze_backbone} --model_name ${model_name}${others}"
-CMD_TEST="nohup python -u tools/train.py --seed ${seed} --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_cal_${serial}/${model_name}_last.pth"
+CMD_TEST="nohup python -u tools/train.py --test_multiple 0 --test_only --ckpt_path results_train/${dataset_name}_${model_name}_cal_${serial}/${model_name}_last.pth"
 echo "${CMD}"
 echo "${CMD_TEST}"
 
@@ -110,6 +110,11 @@ echo "${CMD_TEST}"
 if [[ "$run" == "True" ]]; then
     echo "${CMD} --seed ${seed} --base_lr ${lr}"
     ${CMD} --seed ${seed} --base_lr ${lr}
+
+    if [[ "$cal_ap_only" == "True" ]]; then
+        echo "${CMD_TEST} --cal_ap_only "
+        ${CMD_TEST} --cal_ap_only
+    fi
 fi
 
 # lr run
