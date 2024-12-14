@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from fgir_backbones.data_utils.build_dataloaders import build_dataloaders
 from fgir_backbones.model_utils.build_model import build_model
 from fgir_backbones.other_utils.build_args import parse_train_args
-from fgir_backbones.train_utils.misc_utils import summary_stats, stats_test, set_random_seed
+from fgir_backbones.train_utils.misc_utils import summary_stats, stats_test, set_random_seed, count_flops
 from fgir_backbones.train_utils.scheduler import build_scheduler
 from fgir_backbones.train_utils.trainer import Trainer
 from fgir_backbones.train_utils.calc_loss import OverallLoss
@@ -94,6 +94,8 @@ def main():
     trainer = Trainer(args, model, criterion, optimizer, lr_scheduler,
                       train_loader, val_loader)
 
+    flops = count_flops(model, args.image_size, args.device, args.debugging, 'torchprofile')
+
     if args.test_only:
         if not args.vis_errors and not args.debugging and not args.offline:
             wandb.init(config=args, project=args.project_name, entity=args.entity)
@@ -111,7 +113,7 @@ def main():
             else:
                 num_images = args.num_images_test
 
-            stats_test(test_acc, class_deviation, max_memory, no_params, no_params_trainable,
+            stats_test(test_acc, class_deviation, flops, max_memory, no_params, no_params_trainable,
                        time_total, num_images, (args.vis_errors or args.offline))
             if not args.vis_errors and not args.offline:
                 wandb.finish()
@@ -129,7 +131,7 @@ def main():
         # summary stats
         if args.local_rank == 0 and not args.debugging:
             time_total = time.time() - time_start
-            summary_stats(args.epochs, time_total, best_acc, best_epoch, max_memory,
+            summary_stats(args.epochs, time_total, best_acc, best_epoch, flops, max_memory,
                           no_params, no_params_trainable, class_deviation, args.offline)
             if not args.offline:
                 wandb.finish()

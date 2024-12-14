@@ -5,6 +5,26 @@ import torch
 import wandb
 
 
+from torchprofile import profile_macs
+
+
+def count_flops(model, image_size=224, device='cuda', debugging=False, profiler='torchprofile'):
+    # https://github.com/Lyken17/pytorch-OpCounter
+    # https://github.com/sovrasov/flops-counter.pytorch
+    # https://github.com/zhijian-liu/torchprofile
+    model.eval()
+    with torch.no_grad():
+        x = torch.rand(1, 3, image_size, image_size).to(device)
+        if profiler == 'torchprofile':
+            flops = profile_macs(model, x)
+        else:
+            raise NotImplemented
+
+        flops = round(flops / 1e9, 4)
+    print('FLOPs (G): ', flops)
+    return flops
+
+
 def count_params_module_list(module_list):
     return sum([count_params_single(model) for model in module_list])
 
@@ -27,14 +47,14 @@ def set_random_seed(seed=0, numpy=True):
     return 0
 
 
-def summary_stats(epochs, time_total, best_acc, best_epoch, max_memory,
+def summary_stats(epochs, time_total, best_acc, best_epoch, flops, max_memory,
                   no_params, no_params_trainable, class_deviation, offline=False):
-    time_avg = round((time_total / epochs) / 60, 2)
-    best_time = round((time_avg * best_epoch) / 60, 2)
-    time_total = round(time_total / 60, 2)  # mins
-    no_params = round(no_params / (1e6), 2)  # millions of parameters
-    no_params_trainable = round(no_params_trainable / (1e6), 2)  # millions
-    max_memory = round(max_memory, 2)
+    time_avg = round((time_total / epochs) / 60, 4)
+    best_time = round((time_avg * best_epoch) / 60, 4)
+    time_total = round(time_total / 60, 4)  # mins
+    no_params = round(no_params / (1e6), 4)  # millions of parameters
+    no_params_trainable = round(no_params_trainable / (1e6), 4)  # millions
+    max_memory = round(max_memory, 4)
 
     print('''Total run time (minutes): {}
           Average time per epoch (minutes): {}
@@ -52,6 +72,7 @@ def summary_stats(epochs, time_total, best_acc, best_epoch, max_memory,
         wandb.run.summary['best_acc'] = best_acc
         wandb.run.summary['best_epoch'] = best_epoch
         wandb.run.summary['best_time'] = best_time
+        wandb.run.summary['flops'] = flops
         wandb.run.summary['max_memory'] = max_memory
         wandb.run.summary['no_params'] = no_params
         wandb.run.summary['no_params_trainable'] = no_params_trainable
@@ -59,13 +80,13 @@ def summary_stats(epochs, time_total, best_acc, best_epoch, max_memory,
     return 0
 
 
-def stats_test(test_acc, class_deviation, max_memory, no_params,
+def stats_test(test_acc, class_deviation, flops, max_memory, no_params,
                no_params_trainable, time_total, num_images, offline=False):
 
-    throughput = round(num_images / time_total, 2)
-    no_params = round(no_params / (1e6), 2)  # millions of parameters
-    no_params_trainable = round(no_params_trainable / (1e6), 2)  # millions
-    max_memory = round(max_memory, 2)
+    throughput = round(num_images / time_total, 4)
+    no_params = round(no_params / (1e6), 4)  # millions of parameters
+    no_params_trainable = round(no_params_trainable / (1e6), 4)  # millions
+    max_memory = round(max_memory, 4)
 
     print('''Throughput (images / s): {}
           Test accuracy (%): {}
@@ -79,6 +100,7 @@ def stats_test(test_acc, class_deviation, max_memory, no_params,
         wandb.run.summary['test_acc'] = test_acc
         wandb.run.summary['class_deviation'] = class_deviation
         wandb.run.summary['throughput'] = throughput
+        wandb.run.summary['flops'] = flops
         wandb.run.summary['max_memory'] = max_memory
         wandb.run.summary['no_params'] = no_params
         wandb.run.summary['no_params_trainable'] = no_params_trainable
