@@ -349,8 +349,12 @@ def parse_inference_args():
                         help='path to folder (with images) or image')
     parser.add_argument('--results_inference', type=str, default='results_inference',
                         help='path to folder to save result crops')
+
+    # visualization
     parser.add_argument('--save_crops_only', action='store_false',
                         help='save only crop')
+    parser.add_argument('--vis_cols', type=int, default=None,
+                        help='how many columns when visualizing images')
     parser.add_argument('--vis_dataset_all', action='store_true',
                         help='if true then visualizes whole dataset otherwise first batch')
     parser.add_argument('--vis_mask_color', action='store_false',

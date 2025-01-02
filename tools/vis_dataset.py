@@ -12,7 +12,7 @@ from fgir_backbones.train_utils.save_vis_images import inverse_normalize
 
 def adjust_args_general(args):
     args.run_name = '{}_{}'.format(args.dataset_name, args.serial)
-    args.results_dir = os.path.join(args.results_dir, args.run_name)
+    args.results_dir = os.path.join(args.results_inference, args.run_name)
     os.makedirs(args.results_dir, exist_ok=True)
     return args
 
@@ -32,7 +32,11 @@ def vis_dataset(args):
         for idx, (images, _) in enumerate(loader):
             images = inverse_normalize(images.data, norm_custom=args.custom_mean_std)
             fp = os.path.join(args.results_dir, f'{split}_{idx}.png')
-            save_image(images, fp, nrow=int(math.sqrt(images.shape[0])))
+
+            number_imgs = images.shape[0]
+            ncols = args.vis_cols if args.vis_cols else int(number_imgs ** 0.5)
+            nrows = number_imgs // ncols
+            save_image(images, fp, nrow=nrows, padding=2)
 
             if idx % args.log_freq == 0:
                 print(f'{split} ({idx} / {len(loader)}): {fp}')
