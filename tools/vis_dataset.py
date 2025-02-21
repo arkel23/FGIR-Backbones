@@ -36,7 +36,8 @@ def vis_dataset(args):
             number_imgs = images.shape[0]
             ncols = args.vis_cols if args.vis_cols else int(number_imgs ** 0.5)
             nrows = number_imgs // ncols
-            save_image(images, fp, nrow=nrows, padding=2)
+            number_per_row = number_imgs // nrows
+            save_image(images, fp, nrow=number_per_row, padding=2)
 
             if idx % args.log_freq == 0:
                 print(f'{split} ({idx} / {len(loader)}): {fp}')
