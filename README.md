@@ -86,14 +86,15 @@ Dataset stats:
 
 ## Train
 
-To train a `GLSim-ViT B-16` with CLS classifier on CUB using image size 224:
+To train a `ViT B-16` with CALMix on CUB using image size 448:
+
 ```
-python tools/train.py --cfg configs/cub_ft_is224_medaugs.yaml --lr 0.01 --model_name vit_b16 --cfg_method configs/methods/glsim.yaml
+python -u tools/train.py --serial 11 --cfg configs/cub_ft_weakaugs.yaml --seed 100 --lr 0.01 --model_name vit_b16 --selector cal --batch_size 4 --image_size 448 --cal_cm
 ```
 
-Similarly, for image size 448:
+To train a `ResNet-101` with traditional fine-tuning on Aircraft:
 ```
-python tools/train.py --cfg configs/cub_ft_is224_medaugs.yaml --lr 0.01 --model_name vit_b16 --cfg_method configs/methods/glsim.yaml --cfg_is configs/settings/ft_is448.yaml
+python -u tools/train.py --serial 1 --cfg configs/aircraft_ft_is224_weakaugs.yaml --seed 1 --lr 0.03 --model_name resnet101 --project_name Backbones
 ```
 
 ## Evaluation
@@ -101,59 +102,35 @@ python tools/train.py --cfg configs/cub_ft_is224_medaugs.yaml --lr 0.01 --model_
 To evaluate a particular checkpoint on the test set (logs results to W&B):
 
 ```
-python tools/train.py --ckpt_path ckpts/cub_glsim_224.pth --test_only
+python -u tools/train.py --ckpt_path ckpts/aircraft_vit_b16_cal.pth --cfg configs/datasets/aircraft.yaml --test_only --test_multiple 0
 ```
 
-To enforce batch size 1 (emulates streaming / on-demand classification behavior):
-```
-python tools/train.py --ckpt_path ckpts/cub_glsim_224.pth --batch_size 1
-```
+Note: the `test_multiple 0` makes it so that the test script runs only once, by default it runs 5 times to allow more precise estimation of latency and throughput.
 
-To visulize misclassification for a particular network on the test set:
+# Citation
+If you find our work helpful in your research, please cite it as:
 
 ```
-python tools/train.py --ckpt_path ckpts/cub_glsim_224.pth --vis_errors
-```
-
-To save these results (results are saved in the same folder as train folder) (*note: takes some time):
-
-```
-python tools/train.py --ckpt_path ckpts/cub_glsim_224.pth --vis_errors_save
-```
-
-## Inference
-
-Inference on a single image (saves results of original and crop side by side on `results_inference/`):
-```
-python tools/inference.py --ckpt_path ckpts/dafb_glsim.pth --images_path samples/others/dafb_rena_170785.jpg
-```
-
-To visualize the global-local similarity (and other fine-grained discriminative
-feature selection mechanisms such as attention rollout as shown in the
-following figure):
-
-![](./assets/dfsm.png)
+@misc{rios_large-scale_2026,
+	title = {A {Large}-{Scale} {Study} on the {Accuracy} vs {Cost} {Trade}-offs of {Training} and {Evaluation} {Settings} in {Fine}-{Grained} {Image} {Recognition}},
+	url = {http://arxiv.org/abs/2605.18700},
+	doi = {10.48550/arXiv.2605.18700},
+	abstract = {Prior work on fine-grained image recognition (FGIR) has established the importance of the backbone selection, but has neglected the accuracy-vs-cost trade-offs under different training and evaluation settings. In this work we conduct a large-scale study with over 2000 experiments across 6 training and evaluation settings, 9 pretrained backbones, and 17 datasets. Preliminary observations on the effectiveness of data augmentation for fine-grained training motivate us to extend Counterfactual Attention Learning (CAL), a state-of-the-art method based on data-aware cropping and masking augmentations, with cross-image discriminative region mixing augmentation. We also propose an efficient evaluation-only variant that maintains competitive accuracy while reducing inference costs by forfeiting the forward pass on discriminative crops that is normally used by CAL and similar FGIR methods. Our results show that data-aware augmentations during training only can enable a model to achieve excellent accuracy even without crops, significantly reducing inference costs. To support future research we share our code and checkpoints at: {\textbackslash}url\{https://github.com/arkel23/FGIR-Backbones\}},
+	urldate = {2026-05-19},
+	publisher = {arXiv},
+	author = {Rios, Edwin Arkel and Surya, Augusto Christian and Gosal, Oswin and Mikael, Fernando and Nicole, Mary Madeline and Jang, Kisoon and Lai, Bo-Cheng and Hu, Min-Chun},
+	month = may,
+	year = {2026},
+	note = {arXiv:2605.18700 [cs.CV]},
+	keywords = {Computer Science - Computer Vision and Pattern Recognition},
+}
 
 ```
-python tools/inference.py --ckpt_path ckpts/dafb_glsim.pth --images_path samples/others/dafb_rena_170785.jpg --vis_mask_sq --vis_mask glsim_norm
-python tools/inference.py --ckpt_path ckpts/dafb_glsim.pth --images_path samples/others/dafb_rena_170785.jpg --vis_mask rollout
-```
 
-For doing inference on a whole folder (and its subdirectories):
-```
-python tools/inference.py --ckpt_path ckpts/cub_glsim_224.pth --images_path samples/
-```
+# Acknowledgements
+We thank NYCU's HPC Center and National Center for High-performance Computing (NCHC) for providing computational and storage resources. 
 
-## Usage as a module
-```
-import torch
-from glsim.model_utils import ViTGLSim, ViTConfig
+We thank the authors of [CAL](https://github.com/raoyongming/CAL), and [timm](https://github.com/huggingface/pytorch-image-models/) for their code we used as foundation.
 
-model_name = 'vit_b16'
-cfg = ViTConfig(model_name, debugging=True, classifier='cls', dynamic_anchor=True,
-    reducer='cls', aggregator=True, aggregator_norm=True, aggregator_num_hidden_layers=1)
-model = ViTGLSim(cfg)
-
-x = torch.rand(2, cfg.num_channels, cfg.image_size, cfg.image_size)
-out = model(x)
-```
+Also, [Weight and Biases](https://wandb.ai/) for their platform for experiment management.
+ 
