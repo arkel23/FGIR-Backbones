@@ -38,6 +38,18 @@ entry points stable, and prefer additive changes (a new file over an edited one)
   a paragraph.
 
 
+## Model files look duplicated, and that is expected
+
+The backbone families under `fgir_backbones/model_utils` are timm forks, so they share most of their lines. That is the design, not drift; do not deduplicate them into a shared base, and apply a fix to shared lines in each fork.
+
+## Config loading
+
+`--cfg` takes one or more YAMLs, merged left to right, and a config may pull in others
+through a `defaults:` block. **Anything given on the command line wins over every config**
+— an option counts as given even when its value equals the default. The mechanism is
+`fgir_backbones/other_utils/config.py`; do not reintroduce a loader that writes YAML values over
+`args` unconditionally, which is what it replaced.
+
 ## Blend into the repo's code (2026-08-11)
 
 You are being judged on how well the code you write matches the repo's original

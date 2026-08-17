@@ -2,7 +2,7 @@ import os
 import argparse
 import torch
 
-from .yaml_config_hook import yaml_config_hook
+from .config import adjust_config
 
 
 VITS = ['vit_t4', 'vit_t8', 'vit_t16', 'vit_t32', 'vit_s8', 'vit_s16', 'vit_s32',
@@ -328,16 +328,14 @@ def parse_train_args(ret_parser=False):
     parser = add_optim_scheduler_args(parser)
     parser = add_augmentation_args(parser)
     parser = add_model_args(parser)
-    parser.add_argument("--cfg", type=str, default=None,
-                        help="If using it overwrites args and reads yaml file in given path")
-    parser.add_argument("--cfg_method", type=str, default=None,
-                        help="If using it overwrites args and reads yaml file in given path")
+    parser.add_argument("--cfg", type=str, nargs='+', default=None,
+                        help='one or more yaml configs, merged left to right; command-line options win')
 
     if ret_parser:
         return parser
 
     args = parser.parse_args()
-    adjust_config(args)
+    adjust_config(parser, args)
     args = add_adjust_common_dependent(args)
 
     return args
@@ -370,23 +368,9 @@ def parse_inference_args():
     parser.add_argument('--vis_mask_list', type=str, nargs='+', default=VIS_LIST,
                         help='visualize a few selected methods')
     args = parser.parse_args()
-    adjust_config(args)
+    adjust_config(parser, args)
     args = add_adjust_common_dependent(args)
     return args
-
-
-def adjust_config(args):
-    if args.cfg:
-        config = yaml_config_hook(os.path.abspath(args.cfg))
-        for k, v in config.items():
-            if hasattr(args, k):
-                setattr(args, k, v)
-
-    if args.cfg_method:
-        config = yaml_config_hook(os.path.abspath(args.cfg_method))
-        for k, v in config.items():
-            if hasattr(args, k):
-                setattr(args, k, v)
 
 
 if __name__ == '__main__':

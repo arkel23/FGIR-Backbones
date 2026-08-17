@@ -3,6 +3,7 @@ ml-collections
 #timm==0.6.13
 #pip install --no-dependencies --force-reinstall -v "timm==0.6.13"
 einops
+omegaconf
 gradio
 scipy==1.8.0
 #kornia==0.6.11
