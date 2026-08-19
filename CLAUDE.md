@@ -7,8 +7,9 @@ entry points stable, and prefer additive changes (a new file over an edited one)
 
 ## Environment
 
-- Conda env: check for **`fgir_timm9`** or **`fgir_2x`** first — one of these exists on
-  most of our servers. Most FGIR repos pin `timm==0.9.12`; other packages are flexible.
+- Conda env: check for **`fgir_timm912`** or **`fgir_timm613`** first — one of these
+  exists on most of our servers. Most FGIR repos pin `timm==0.9.12`; other packages are
+  flexible.
 - **This repo is the exception: it is built around `timm==0.6.13`** — Swin, BEiT and
   possibly BEiT-v2 break under 0.9.12; verify before switching envs.
 - **No `pip install -e .` needed.** Run from the repo root so the local package wins
