@@ -20,34 +20,26 @@ AUTHOR = 'blank'
 REQUIRES_PYTHON = '>=3.5.0'
 VERSION = '1.0'
 
-# What packages are required for this module to be executed?
-REQUIRED = [
-    # 'django-pipeline==1.1.22', 'south>=0.7'
-    'einops',
-    'numpy',
-#    'torch',
-    'ml-collections',
-    'torchsummary',
-    'wandb',
-    'timm',
-    'kaggle',
-    'gdown',
-    'gradio',
-    'scipy',
-#    'kornia',
-]
+here = os.path.abspath(os.path.dirname(__file__))
 
-# What packages are optional?
-EXTRAS = {
-    # 'fancy feature': ['django'],
-}
+
+def read_requirements(fp):
+    # pip options (-r, --extra-index-url) and comments are not package requirements
+    with open(os.path.join(here, fp)) as f:
+        return [line.strip() for line in f if line.strip() and not line.lstrip().startswith(('#', '-'))]
+
+
+# The pinned requirements files are the single source: requirements.txt for training,
+# requirements/<group>.txt for each optional group, installable as `pip install -e ".[<group>]"`.
+REQUIRED = read_requirements('requirements.txt')
+EXTRAS = {os.path.splitext(name)[0]: read_requirements(os.path.join('requirements', name))
+          for name in sorted(os.listdir(os.path.join(here, 'requirements')))}
 
 # The rest you shouldn't have to touch too much :)
 # ------------------------------------------------
 # Except, perhaps the License and Trove Classifiers!
 # If you do change the License, remember to change the Trove Classifier for that!
 
-here = os.path.abspath(os.path.dirname(__file__))
 
 # Import the README and use it as the long-description.
 # Note: this will only work if 'README.md' is present in your MANIFEST.in file!

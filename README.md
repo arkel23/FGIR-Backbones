@@ -50,9 +50,27 @@ Extensive benchmark across models and datasets. Swin B (IN21k) and ConvNeXt B (I
 
 ## Setup
 
+```bash
+conda create -n fgir_timm613 python=3.10
+conda activate fgir_timm613
+pip install -r requirements.txt
 ```
-pip install -e . 
-```
+
+`requirements.txt` pins every package training imports, including torch 1.13.1+cu117 and timm 0.6.13, and the index for that
+CUDA build. Each file in `requirements/` adds the packages for one group of scripts on top of it:
+
+| File | Needed by |
+|---|---|
+| `requirements/analysis.txt` | tools/compute_feature_metrics.py, tools/heatmap.py, tools/gradcam.py |
+| `requirements/profiling.txt` | tools/calc_flops.py |
+| `requirements/data.txt` | tools/preprocess/download_daf_moe.py |
+
+Install a group with `pip install -r requirements/analysis.txt`, several by repeating `-r`. The same
+groups are extras of the package: `pip install -e ".[analysis,profiling,data]" --extra-index-url https://download.pytorch.org/whl/cu117`.
+Installing into an env that already has the pinned versions installs nothing. The repo itself needs
+no install: run scripts as modules from the repo root, `python -m tools.<script> ...`.
+
+Not covered by these files: `tools/demo.py` (gradio); the optional apex fp16 path.
 
 ## Preparation
 

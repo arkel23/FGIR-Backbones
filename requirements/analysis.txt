@@ -1,0 +1,5 @@
+# tools/compute_feature_metrics.py, tools/heatmap.py, tools/gradcam.py. Installs the training requirements too.
+-r ../requirements.txt
+tqdm==4.70.0
+opencv-python-headless==4.11.0.86
+grad-cam==1.5.7

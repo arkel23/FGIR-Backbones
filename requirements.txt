@@ -1,15 +1,17 @@
-wandb
-ml-collections
-#timm==0.6.13
-#pip install --no-dependencies --force-reinstall -v "timm==0.6.13"
-einops
-omegaconf
-gradio
+# Python 3.10; the versions of the fgir_timm613 env (Swin and BEiT need timm 0.6.13). Run from the repo root with python -m tools.<script>.
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch==1.13.1+cu117
+torchvision==0.14.1+cu117
+timm==0.6.13
+huggingface_hub==1.28.0
+einops==0.8.2
+omegaconf==2.3.1
+PyYAML==6.0.3
+wandb==0.28.2
+torchprofile==0.0.4
+pandas==2.3.3
+numpy==1.24.4
+matplotlib==3.10.9
+pillow==12.3.0
+ml_collections==1.1.0
 scipy==1.8.0
-#kornia==0.6.11
-# newer versions of pytorch (>1.8.0 cu111)
-#pip install --no-dependencies --force-reinstall -v "kornia==0.6.11"
-# older versions of pytorch
-#pip install --no-dependencies --force-reinstall -v "kornia==0.6.0"
-
-

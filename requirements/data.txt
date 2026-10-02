@@ -1,0 +1,3 @@
+# tools/preprocess/download_daf_moe.py. Installs the training requirements too.
+-r ../requirements.txt
+gdown==6.4.1
